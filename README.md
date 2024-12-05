@@ -74,7 +74,7 @@ tofu init -upgrade
 
 [acus]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html#aurora-serverless-v2.how-it-works.capacity
 [aurora-serverless]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html
-[badge-checks]: https://github.com/codeforamerica/tofu-modules-template/actions/workflows/main.yaml/badge.svg
-[badge-release]: https://img.shields.io/github/v/release/codeforamerica/tofu-modules-template?logo=github&label=Latest%20Release
-[code-checks]: https://github.com/codeforamerica/tofu-modules-template/actions/workflows/main.yaml
-[latest-release]: https://github.com/codeforamerica/tofu-modules-template/releases/latest
+[badge-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml/badge.svg
+[badge-release]: https://img.shields.io/github/v/release/codeforamerica/tofu-modules-aws-serverless-database?logo=github&label=Latest%20Release
+[code-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml
+[latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
