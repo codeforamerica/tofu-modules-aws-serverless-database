@@ -7,7 +7,7 @@ on:
 
 jobs:
   lint:
-    name: Lint updated modules
+    name: Lint module
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
@@ -24,7 +24,8 @@ jobs:
       - name: Init TFLint
         run: tflint --init
       - name: Run TFLint
-        run: tflint --format compact --recursive
+        run: tflint --format compact --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl"
+
 
   trivy:
     name: Run security scan
