@@ -57,6 +57,7 @@ tofu init -upgrade
 | apply_immediately   | Whether to apply changes immediately rather than during the next maintenance window. WARNING: This may result in a restart of the cluster! | `bool`   | `false` | no       |
 | environment         | Environment for the project.                                                                                                               | `string` | `"dev"` | no       |
 | force_delete        | Force deletion of resources. If changing to true, be sure to apply before destroying.                                                      | `bool`   | `false` | no       |
+| instances           | Number of instances to create in the database cluster.                                                                                     | `number` | `2`     | no       |
 | key_recovery_period | Recovery period for deleted KMS keys in days. Must be between 7 and 30.                                                                    | `number` | `30`    | no       |
 | min_capacity        | Minimum capacity for the serverless cluster in ACUs.                                                                                       | `number` | `2`     | no       |
 | max_capacity        | Maximum capacity for the serverless cluster in ACUs.                                                                                       | `number` | `10`    | no       |
