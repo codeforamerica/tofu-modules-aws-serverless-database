@@ -14,6 +14,7 @@ module "database" {
   copy_tags_to_snapshot  = true
   snapshot_identifier    = var.snapshot_identifier
   deletion_protection    = !var.force_delete
+  enable_http_endpoint   = var.enable_data_api
 
   vpc_id = var.vpc_id
   security_group_rules = {

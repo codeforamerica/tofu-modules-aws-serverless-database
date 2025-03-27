@@ -55,6 +55,7 @@ tofu init -upgrade
 | subnets             | List of subnet ids the database instances may be placed in.                                                                                | `list`   | n/a     | yes      |
 | vpc_id              | Id of the VPC to launch the database cluster into.                                                                                         | `string` | n/a     | yes      |
 | apply_immediately   | Whether to apply changes immediately rather than during the next maintenance window. WARNING: This may result in a restart of the cluster! | `bool`   | `false` | no       |
+| enable_data_api     | Whether to enable the [Data API][data-api] for the database cluster.                                                                       | `bool`   | `false` | no       |
 | environment         | Environment for the project.                                                                                                               | `string` | `"dev"` | no       |
 | force_delete        | Force deletion of resources. If changing to true, be sure to apply before destroying.                                                      | `bool`   | `false` | no       |
 | key_recovery_period | Recovery period for deleted KMS keys in days. Must be between 7 and 30.                                                                    | `number` | `30`    | no       |
@@ -77,4 +78,5 @@ tofu init -upgrade
 [badge-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml/badge.svg
 [badge-release]: https://img.shields.io/github/v/release/codeforamerica/tofu-modules-aws-serverless-database?logo=github&label=Latest%20Release
 [code-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml
+[data-api]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html
 [latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
