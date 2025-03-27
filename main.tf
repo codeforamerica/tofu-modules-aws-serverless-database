@@ -53,6 +53,9 @@ module "database" {
     max_capacity = var.max_capacity
   }
 
+  # TODO: Configure log groups.
+  enabled_cloudwatch_logs_exports = ["iam-db-auth-error", "instance", "postgresql"]
+
   instance_class = "db.serverless"
   instances = {
     for i in range(var.instances) : (i + 1) => {}
