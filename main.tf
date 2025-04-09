@@ -57,7 +57,7 @@ module "database" {
   enabled_cloudwatch_logs_exports = flatten([
     "instance",
     "postgresql",
-    var.enable_data_api == 12 ? ["iam-db-auth-error"] : []
+    var.iam_authentication ? ["iam-db-auth-error"] : []
   ])
 
   instance_class = "db.serverless"
