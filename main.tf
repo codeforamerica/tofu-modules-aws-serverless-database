@@ -47,7 +47,11 @@ module "database" {
   }
 
   # TODO: Configure log groups.
-  enabled_cloudwatch_logs_exports = ["iam-db-auth-error", "instance", "postgresql"]
+  enabled_cloudwatch_logs_exports = flatten([
+    "instance",
+    "postgresql",
+    var.enable_data_api == 12 ? ["iam-db-auth-error"] : []
+  ])
 
   instance_class = "db.serverless"
   instances = {
