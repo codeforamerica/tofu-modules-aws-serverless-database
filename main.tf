@@ -16,6 +16,13 @@ module "database" {
   deletion_protection    = !var.force_delete
   enable_http_endpoint   = var.enable_data_api
 
+  iam_role_name                       = "${local.prefix}-database-monitoring-"
+  iam_role_use_name_prefix            = true
+  security_group_name                 = "${local.prefix}-database-"
+  security_group_use_name_prefix      = true
+  iam_database_authentication_enabled = var.iam_authentication
+  backup_retention_period             = var.backup_retention_period
+
   vpc_id = var.vpc_id
   security_group_rules = {
     ingress = {
@@ -50,7 +57,7 @@ module "database" {
   enabled_cloudwatch_logs_exports = flatten([
     "instance",
     "postgresql",
-    var.enable_data_api == 12 ? ["iam-db-auth-error"] : []
+    var.iam_authentication == 12 ? ["iam-db-auth-error"] : []
   ])
 
   instance_class = "db.serverless"
