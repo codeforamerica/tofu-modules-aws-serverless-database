@@ -16,6 +16,10 @@ module "database" {
   deletion_protection    = !var.force_delete
   enable_http_endpoint   = var.enable_data_api
 
+  create_db_cluster_parameter_group     = length(var.cluster_parameters) > 0
+  db_cluster_parameter_group_family     = "aurora-postgresql16"
+  db_cluster_parameter_group_parameters = var.cluster_parameters
+
   iam_role_name                       = "${local.prefix}-database-monitoring-"
   iam_role_use_name_prefix            = true
   security_group_name                 = "${local.prefix}-database-"

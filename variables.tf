@@ -15,6 +15,15 @@ variable "backup_retention_period" {
   }
 }
 
+variable "cluster_parameters" {
+  type = list(object({
+    name         = string
+    value        = string
+    apply_method = optional(string, "immediate")
+  }))
+  description = "Parameters to be set on the database cluster."
+}
+
 variable "enable_data_api" {
   type        = bool
   description = "Whether to enable the Data API for the database cluster."
