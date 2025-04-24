@@ -59,7 +59,7 @@ tofu init -upgrade
 | [cluster_parameters]    | Parameters to be set on the database cluster.                                                                                              | `list(object)` | `[]`           | no       |
 | enable_data_api         | Whether to enable the [Data API][data-api] for the database cluster.                                                                       | `bool`         | `false`        | no       |
 | engine                  | Database engine to use for the cluster. Valid values are 'mysql' and 'postgresql'.                                                         | `string`       | `"postgresql"` | no       |
-| engine_version          | Version of the database engine to use.                                                                                                     | `string`       | `"16"`         | no       |
+| engine_version          | Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime.        | `string`       | `null`         | no       |
 | environment             | Environment for the project.                                                                                                               | `string`       | `"dev"`        | no       |
 | force_delete            | Force deletion of resources. If changing to true, be sure to apply before destroying.                                                      | `bool`         | `false`        | no       |
 | iam_authentication      | Whether to enable IAM authentication for the database cluster.                                                                             | `bool`         | `true`         | no       |
