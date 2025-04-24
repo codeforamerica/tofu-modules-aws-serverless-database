@@ -6,7 +6,7 @@ variable "apply_immediately" {
 
 variable "backup_retention_period" {
   type        = number
-  description = "Number of days to retain backups, between 1 and 35."
+  description = "Number of days to retain automatic backups, between 1 and 35."
   default     = 31
 
   validation {
