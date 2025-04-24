@@ -46,10 +46,8 @@ module "database" {
   }
 
   instance_class = "db.serverless"
-  # TODO: Make the number of instances configurable.
   instances = {
-    one = {}
-    two = {}
+    for i in range(var.instances) : (i + 1) => {}
   }
 
   tags = var.tags

@@ -26,6 +26,11 @@ variable "ingress_cidrs" {
   description = "List of CIDR blocks to allow ingress. This is typically your private subnets."
 }
 
+variable "instances" {
+  type        = number
+  description = "Number of instances to create in the database cluster."
+  default     = 2
+}
 variable "key_recovery_period" {
   type        = number
   default     = 30
