@@ -14,7 +14,7 @@ to match your desired configuration. For example:
 
 ```hcl
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.1.0"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.2.0"
 
   project     = "my-project"
   environment = "dev"
@@ -131,7 +131,7 @@ security_group_rules = {
 }
 ```
 
-> [!WARNING]
+> [!CAUTION]
 > Be careful when using `egress` rules. In most cases, this will not be
 > necessary and can present a security risk. If you do need to use `egress`
 > rules, be sure to restrict the narrowest set of destinations that are
