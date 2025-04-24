@@ -4,6 +4,17 @@ variable "apply_immediately" {
   default     = false
 }
 
+variable "backup_retention_period" {
+  type        = number
+  description = "Number of days to retain automatic backups, between 1 and 35."
+  default     = 31
+
+  validation {
+    condition     = var.backup_retention_period > 0 && var.backup_retention_period < 36
+    error_message = "Backup retention must be between 1 and 35 days."
+  }
+}
+
 variable "enable_data_api" {
   type        = bool
   description = "Whether to enable the Data API for the database cluster."
@@ -25,6 +36,12 @@ variable "force_delete" {
 variable "logging_key_arn" {
   type        = string
   description = "ARN of the KMS key for logging."
+}
+
+variable "iam_authentication" {
+  type        = bool
+  description = "Whether to enable IAM authentication for the database cluster."
+  default     = true
 }
 
 variable "ingress_cidrs" {
