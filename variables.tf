@@ -4,6 +4,12 @@ variable "apply_immediately" {
   default     = false
 }
 
+variable "enable_data_api" {
+  type        = bool
+  description = "Whether to enable the Data API for the database cluster."
+  default     = false
+}
+
 variable "environment" {
   type        = string
   description = "Environment for the deployment."
