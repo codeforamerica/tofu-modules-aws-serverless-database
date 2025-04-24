@@ -30,6 +30,23 @@ variable "enable_data_api" {
   default     = false
 }
 
+variable "engine" {
+  type        = string
+  description = "Database engine to use for the cluster. Valid values are 'mysql' and 'postgresql'."
+  default     = "postgresql"
+
+  validation {
+    condition     = contains(["mysql", "postgresql"], var.engine)
+    error_message = "Valid enginers are 'mysql' and 'postgresql'."
+  }
+}
+
+variable "engine_version" {
+  type        = string
+  description = "Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime."
+  default     = null
+}
+
 variable "environment" {
   type        = string
   description = "Environment for the deployment."

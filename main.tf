@@ -5,7 +5,8 @@ module "database" {
   name                   = local.prefix
   create_db_subnet_group = true
   db_subnet_group_name   = local.prefix
-  engine                 = "aurora-postgresql"
+  engine                 = "aurora-${var.engine}"
+  engine_version         = var.engine_version
   engine_mode            = "provisioned"
   storage_encrypted      = true
   kms_key_id             = aws_kms_key.database.arn
@@ -17,7 +18,7 @@ module "database" {
   enable_http_endpoint   = var.enable_data_api
 
   create_db_cluster_parameter_group     = length(var.cluster_parameters) > 0
-  db_cluster_parameter_group_family     = "aurora-postgresql16"
+  db_cluster_parameter_group_family     = data.aws_rds_engine_version.this.parameter_group_family
   db_cluster_parameter_group_parameters = var.cluster_parameters
 
   iam_role_name                       = "${local.prefix}-database-monitoring-"
