@@ -43,8 +43,8 @@ variable "engine" {
 
 variable "engine_version" {
   type        = string
-  description = "Version of the database engine to use."
-  default     = "16"
+  description = "Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime."
+  default     = null
 }
 
 variable "environment" {

@@ -6,9 +6,6 @@ data "aws_region" "current" {}
 
 data "aws_rds_engine_version" "this" {
   engine             = "aurora-${var.engine}"
-  preferred_versions = [var.engine_version]
-}
-
-output "version_info" {
-  value = data.aws_rds_engine_version.this
+  version = var.engine_version
+  latest = true
 }
