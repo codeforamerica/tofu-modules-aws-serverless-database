@@ -46,29 +46,30 @@ tofu init -upgrade
 
 ## Inputs
 
-| Name                    | Description                                                                                                                                | Type           | Default | Required |
-|-------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|----------------|---------|----------|
-| logging_key_arn         | ARN of the KMS key for logging.                                                                                                            | `string`       | n/a     | yes      |
-| ingress_cidrs           | List of CIDR blocks to allow ingress. This is typically your private subnets.                                                              | `list`         | n/a     | yes      |
-| project                 | Name of the project.                                                                                                                       | `string`       | n/a     | yes      |
-| secrets_key_arn         | ARN of the KMS key for secrets. This will be used to encrypt database credentials.                                                         | `string`       | n/a     | yes      |
-| subnets                 | List of subnet ids the database instances may be placed in.                                                                                | `list`         | n/a     | yes      |
-| vpc_id                  | Id of the VPC to launch the database cluster into.                                                                                         | `string`       | n/a     | yes      |
-| apply_immediately       | Whether to apply changes immediately rather than during the next maintenance window. WARNING: This may result in a restart of the cluster! | `bool`         | `false` | no       |
-| backup_retention_period | Number of days to retain automatic backups, between 1 and 35.                                                                              | `number`       | `31`    | no       |
-| [cluster_parameters]    | Parameters to be set on the database cluster.                                                                                              | `list(object)` | `[]`    | no       |
-| enable_data_api         | Whether to enable the [Data API][data-api] for the database cluster.                                                                       | `bool`         | `false` | no       |
-| environment             | Environment for the project.                                                                                                               | `string`       | `"dev"` | no       |
-| force_delete            | Force deletion of resources. If changing to true, be sure to apply before destroying.                                                      | `bool`         | `false` | no       |
-| iam_authentication      | Whether to enable IAM authentication for the database cluster.                                                                             | `bool`         | `true`  | no       |
-| instances               | Number of instances to create in the database cluster.                                                                                     | `number`       | `2`     | no       |
-| key_recovery_period     | Recovery period for deleted KMS keys in days. Must be between 7 and 30.                                                                    | `number`       | `30`    | no       |
-| min_capacity            | Minimum capacity for the serverless cluster in ACUs.                                                                                       | `number`       | `2`     | no       |
-| max_capacity            | Maximum capacity for the serverless cluster in ACUs.                                                                                       | `number`       | `10`    | no       |
-| service                 | Optional service that these resources are supporting. Example: 'api', 'web', 'worker'                                                      | `string`       | `""`    | no       |
-| skip_final_snapshot     | Whether to skip the final snapshot when destroying the database cluster.                                                                   | `bool`         | `false` | no       |
-| snapshot_identifier     | Optional name or ARN of the snapshot to restore the cluster from. Only applicable on create.                                               | `bool`         | `false` | no       |
-| tags                    | Optional tags to be applied to all resources.                                                                                              | `list`         | `[]`    | no       |
+| Name                    | Description                                                                                                                                  | Type           | Default        | Required |
+|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|----------------|----------------|----------|
+| logging_key_arn         | ARN of the KMS key for logging.                                                                                                              | `string`       | n/a            | yes      |
+| ingress_cidrs           | List of CIDR blocks to allow ingress. This is typically your private subnets.                                                                | `list(string)` | n/a            | yes      |
+| project                 | Name of the project.                                                                                                                         | `string`       | n/a            | yes      |
+| secrets_key_arn         | ARN of the KMS key for secrets. This will be used to encrypt database credentials.                                                           | `string`       | n/a            | yes      |
+| subnets                 | List of subnet ids the database instances may be placed in.                                                                                  | `list(string)` | n/a            | yes      |
+| vpc_id                  | Id of the VPC to launch the database cluster into.                                                                                           | `string`       | n/a            | yes      |
+| apply_immediately       | Whether to apply changes immediately rather than during the next maintenance window. WARNING: This may result in a restart of the cluster!   | `bool`         | `false`        | no       |
+| backup_retention_period | Number of days to retain automatic backups, between 1 and 35.                                                                                | `number`       | `31`           | no       |
+| [cluster_parameters]    | Parameters to be set on the database cluster.                                                                                                | `list(object)` | `[]`           | no       |
+| enable_data_api         | Whether to enable the [Data API][data-api] for the database cluster.                                                                         | `bool`         | `false`        | no       |
+| environment             | Environment for the project.                                                                                                                 | `string`       | `"dev"`        | no       |
+| force_delete            | Force deletion of resources. If changing to true, be sure to apply before destroying.                                                        | `bool`         | `false`        | no       |
+| iam_authentication      | Whether to enable IAM authentication for the database cluster.                                                                               | `bool`         | `true`         | no       |
+| instances               | Number of instances to create in the database cluster.                                                                                       | `number`       | `2`            | no       |
+| key_recovery_period     | Recovery period for deleted KMS keys in days. Must be between 7 and 30.                                                                      | `number`       | `30`           | no       |
+| min_capacity            | Minimum capacity for the serverless cluster in ACUs.                                                                                         | `number`       | `2`            | no       |
+| max_capacity            | Maximum capacity for the serverless cluster in ACUs.                                                                                         | `number`       | `10`           | no       |
+| service                 | Optional service that these resources are supporting. Example: 'api', 'web', 'worker'                                                        | `string`       | `""`           | no       |
+| [security_group_rules]  | Security group rules to control cluster ingress and egress.                                                                                  | `map(object)`  | `{}`          | no       |
+| skip_final_snapshot     | Whether to skip the final snapshot when destroying the database cluster.                                                                     | `bool`         | `false`        | no       |
+| snapshot_identifier     | Optional name or ARN of the snapshot to restore the cluster from. Only applicable on create.                                                 | `bool`         | `false`        | no       |
+| tags                    | Optional tags to be applied to all resources.                                                                                                | `map(string)`  | `{}`           | no       |
 
 ### cluster_parameters
 
@@ -101,6 +102,56 @@ cluster_parameters = [
 | value        | Value to set the parameter to.                                      | `string` | n/a           | yes      |
 | apply_method | How to apply the parameter. Can be `immediate` or `pending-reboot`. | `string` | `"immediate"` | no       |
 
+### security_group_rules
+
+Security group rules control network access to the cluster. By default, the
+cluster will not be available on the network can only be accessed via the
+[Data API][data-api]. You can use `security_group_rules` to define rules to
+ingress and/or egress traffic.
+
+> [!TIP]
+> If you just want to allow access to the database from one or more CIDR blocks,
+> you can use the `ingress_cidrs` input variable for convenience.
+
+```hcl
+security_group_rules = {
+  vpc_peer = {
+    description = "Allow access from VPC peer"
+    type        = "ingress"
+    protocol    = "tcp"
+    from_port   = 5432
+    to_port     = 5432
+    cidr_blocks = ["10.123.0.0/16"]
+  }
+  replication = {
+    description = "Allow egress for replication"
+    type        = "egress"
+    cidr_blocks = ["10.123.0.0/16"]
+  }
+}
+```
+
+> [!WARNING]
+> Be careful when using `egress` rules. In most cases, this will not be
+> necessary and can present a security risk. If you do need to use `egress`
+> rules, be sure to restrict the narrowest set of destinations that are
+> necessary.
+>
+> Leaving your egress rules too broad can allow your data to be exfiltrated by
+> a bad actor.
+
+| Name                     | Description                                                               | Type           | Default                 | Required |
+|--------------------------|---------------------------------------------------------------------------|----------------|-------------------------|----------|
+| description              | Description of the rule.                                                  | `string`       | `"Managed by OpenTofu"` | no       |
+| type                     | Type of rule. Can be `ingress` or `egress`.                               | `string`       | `"ingress"`             | no       |
+| protocol                 | Protocol to use. Valid values: `icmp`, `icmpv6`, `tcp`, `udp`, or `all`.  | `string`       | `"tcp"`                 | no       |
+| from_port                | Starting port for the rule. Defaults to the port for the database engine. | `number`       | `5432` or `3306`        | no       |
+| to_port                  | Ending port for the rule. Defaults to the port for the database engine.   | `number`       | `5432` or `3306`        | no       |
+| cidr_blocks              | List of CIDR blocks to allow access.                                      | `list(string)` | `[]`                    | no       |
+| ipv6_cidr_blocks         | List of IPv6 CIDR blocks to allow access.                                 | `list(string)` | `[]`                    | no       |
+| prefix_list_ids          | List of prefix list IDs to allow access.                                  | `list(string)` | `[]`                    | no       |
+| source_security_group_id | ID of another security group to allow access.                             | `string`       | `null`                  | no       |
+
 ## Outputs
 
 | Name             | Description                                      | Type     |
@@ -116,3 +167,4 @@ cluster_parameters = [
 [cluster_parameters]: #cluster_parameters
 [data-api]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html
 [latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
+[security_group_rules]: #security_group_rules

@@ -27,12 +27,8 @@ module "database" {
   iam_database_authentication_enabled = var.iam_authentication
   backup_retention_period             = var.backup_retention_period
 
-  vpc_id = var.vpc_id
-  security_group_rules = {
-    ingress = {
-      cidr_blocks = var.ingress_cidrs
-    }
-  }
+  vpc_id               = var.vpc_id
+  security_group_rules = local.security_group_rules
 
   manage_master_user_password                            = true
   manage_master_user_password_rotation                   = true

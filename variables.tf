@@ -96,6 +96,22 @@ variable "secrets_key_arn" {
   description = "ARN of the KMS key for secrets. This will be used to encrypt database credentials."
 }
 
+variable "security_group_rules" {
+  type = map(object({
+    description              = optional(string, "Managed by OpenTofu")
+    type                     = optional(string, "ingress")
+    protocol                 = optional(string, "tcp")
+    from_port                = optional(number)
+    to_port                  = optional(number)
+    cidr_blocks              = optional(list(string), [])
+    ipv6_cidr_blocks         = optional(list(string), [])
+    prefix_list_ids          = optional(list(string), [])
+    source_security_group_id = optional(string, null)
+  }))
+  description = "Security group rules to control cluster ingress and egress."
+  default     = {}
+}
+
 variable "service" {
   type        = string
   description = "Optional service that these resources are supporting. Example: 'api', 'web', 'worker'"
