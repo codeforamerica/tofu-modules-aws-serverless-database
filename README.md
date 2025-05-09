@@ -44,6 +44,24 @@ To update the source for this module, pass `-upgrade` to `tofu init`:
 tofu init -upgrade
 ```
 
+### Role name limitations
+
+When creating the database cluster, a role will be created for database
+monitoring. A random string will be appended to the role name to ensure it is
+unique and allow replacement without a conflict. However, this means the rest
+of the role name must be **38 characters or fewer**.
+
+The role name is constructed as follows (before the suffix is added):
+
+```hcl
+role_name = "${project}-${environment}-[${service}-]-db-mon"
+```
+
+If this combined string is longer than 38 characters, the module will fail to
+create the database cluster. You can help to reduce the length of the role by
+specifying short names for your project and (optionally) service using the
+`project_short` and `service_short` input variables, respectively.
+
 ## Inputs
 
 | Name                    | Description                                                                                                                                | Type           | Default        | Required |
@@ -67,7 +85,9 @@ tofu init -upgrade
 | key_recovery_period     | Recovery period for deleted KMS keys in days. Must be between 7 and 30.                                                                    | `number`       | `30`           | no       |
 | min_capacity            | Minimum capacity for the serverless cluster in ACUs.                                                                                       | `number`       | `2`            | no       |
 | max_capacity            | Maximum capacity for the serverless cluster in ACUs.                                                                                       | `number`       | `10`           | no       |
+| project_short           | Short name for the project. Used in resource names with character limits. Defaults to project.                                             | `string`       | `var.project`  | no       |
 | service                 | Optional service that these resources are supporting. Example: 'api', 'web', 'worker'                                                      | `string`       | `""`           | no       |
+| service_short           | Short name for the service. Used in resource names with character limits. Defaults to service.                                             | `string`       | `var.service`  | no       |
 | [security_group_rules]  | Security group rules to control cluster ingress and egress.                                                                                | `map(object)`  | `{}`           | no       |
 | skip_final_snapshot     | Whether to skip the final snapshot when destroying the database cluster.                                                                   | `bool`         | `false`        | no       |
 | snapshot_identifier     | Optional name or ARN of the snapshot to restore the cluster from. Only applicable on create.                                               | `bool`         | `false`        | no       |
