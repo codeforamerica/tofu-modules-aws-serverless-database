@@ -21,7 +21,7 @@ module "database" {
   db_cluster_parameter_group_family     = data.aws_rds_engine_version.this.parameter_group_family
   db_cluster_parameter_group_parameters = var.cluster_parameters
 
-  iam_role_name                       = "${local.prefix}-database-monitoring-"
+  iam_role_name                       = "${local.short_prefix}-db-mon"
   iam_role_use_name_prefix            = true
   security_group_name                 = "${local.prefix}-database-"
   security_group_use_name_prefix      = true

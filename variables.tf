@@ -109,6 +109,12 @@ variable "project" {
   description = "Project that these resources are supporting."
 }
 
+variable "project_short" {
+  type        = string
+  description = "Short name for the project. Used in resource names with character limits. Defaults to project."
+  default     = ""
+}
+
 variable "secrets_key_arn" {
   type        = string
   description = "ARN of the KMS key for secrets. This will be used to encrypt database credentials."
@@ -133,6 +139,12 @@ variable "security_group_rules" {
 variable "service" {
   type        = string
   description = "Optional service that these resources are supporting. Example: 'api', 'web', 'worker'"
+  default     = ""
+}
+
+variable "service_short" {
+  type        = string
+  description = "Short name for the service. Used in resource names with character limits. Defaults to service."
   default     = ""
 }
 
