@@ -16,11 +16,11 @@ locals {
     },
     {
       for key, rule in var.security_group_rules : key => {
-      description              = rule.description
-      type                     = rule.type
-      protocol                 = rule.protocol
-      from_port                = rule.from_port == null ? local.port : rule.from_port
-      to_port                  = rule.to_port == null ? local.port : rule.to_port
+        description              = rule.description
+        type                     = rule.type
+        protocol                 = rule.protocol
+        from_port                = rule.from_port == null ? local.port : rule.from_port
+        to_port                  = rule.to_port == null ? local.port : rule.to_port
         cidr_blocks              = rule.cidr_blocks
         ipv6_cidr_blocks         = rule.ipv6_cidr_blocks
         prefix_list_ids          = rule.prefix_list_ids
