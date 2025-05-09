@@ -22,6 +22,7 @@ variable "cluster_parameters" {
     apply_method = optional(string, "immediate")
   }))
   description = "Parameters to be set on the database cluster."
+  default     = []
 }
 
 variable "enable_data_api" {
