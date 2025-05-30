@@ -55,11 +55,11 @@ module "database" {
   }
 
   # TODO: Configure log groups.
-  enabled_cloudwatch_logs_exports = flatten([
+  enabled_cloudwatch_logs_exports = [for l in flatten([
     "instance",
     "postgresql",
     var.iam_authentication ? ["iam-db-auth-error"] : []
-  ])
+  ]) : l if contains(data.aws_rds_engine_version.this.exportable_log_types, l)]
 
   instance_class = "db.serverless"
   instances = {
