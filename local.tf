@@ -1,9 +1,9 @@
 locals {
-  prefix = "${var.project}-${var.environment}${var.service != "" ? "-${var.service}" : ""}"
-  port   = var.engine == "postgresql" ? 5432 : 3306
+  prefix        = "${var.project}-${var.environment}${var.service != "" ? "-${var.service}" : ""}"
+  port          = var.engine == "postgresql" ? 5432 : 3306
   project_short = var.project_short != "" ? var.project_short : var.project
   service_short = var.service_short != "" ? var.service_short : var.service
-  short_prefix = "${local.project_short}-${var.environment}${var.service != "" ? "-${local.service_short}" : ""}"
+  short_prefix  = "${local.project_short}-${var.environment}${var.service != "" ? "-${local.service_short}" : ""}"
 
   # Merge any ingress CIDR blocks with the security group rules.
   security_group_rules = merge(
