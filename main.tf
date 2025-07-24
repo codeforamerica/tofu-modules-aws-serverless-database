@@ -48,6 +48,7 @@ module "database" {
 
   apply_immediately   = var.apply_immediately
   skip_final_snapshot = var.skip_final_snapshot
+  final_snapshot_identifier = "${local.prefix}-final"
 
   serverlessv2_scaling_configuration = {
     min_capacity = var.min_capacity
