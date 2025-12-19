@@ -104,6 +104,12 @@ variable "max_capacity" {
   default     = 10
 }
 
+variable "password_rotation_frequency" {
+  type        = number
+  description = "Number of days between automatic password rotations for the root user. Set to 0 to disable automatic rotation."
+  default     = 30
+}
+
 variable "project" {
   type        = string
   description = "Project that these resources are supporting."
