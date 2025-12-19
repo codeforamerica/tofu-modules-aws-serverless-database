@@ -32,8 +32,8 @@ module "database" {
   security_group_rules = local.security_group_rules
 
   manage_master_user_password                            = true
-  manage_master_user_password_rotation                   = true
-  master_user_password_rotation_automatically_after_days = 30
+  manage_master_user_password_rotation                   = var.password_rotation_frequency > 0
+  master_user_password_rotation_automatically_after_days = var.password_rotation_frequency
 
   cloudwatch_log_group_kms_key_id        = var.logging_key_arn
   cloudwatch_log_group_retention_in_days = 7
