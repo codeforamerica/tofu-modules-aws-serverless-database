@@ -177,11 +177,12 @@ security_group_rules = {
 
 ## Outputs
 
-| Name             | Description                                      | Type     |
-| ---------------- | ------------------------------------------------ | -------- |
-| cluster_endpoint | DNS endpoint to connect to the database cluster. | `string` |
-| cluster_id       | ID of the RDS database cluster.                  | `string` |
-| secret_arn       | ARN of the secret holding database credentials.  | `string` |
+| Name                | Description                                      | Type     |
+| ------------------- | ------------------------------------------------ | -------- |
+| cluster_endpoint    | DNS endpoint to connect to the database cluster. | `string` |
+| cluster_id          | ID of the RDS database cluster.                  | `string` |
+| cluster_resource_id | Resource ID of the RDS database cluster.         | `string` |
+| secret_arn          | ARN of the secret holding database credentials.  | `string` |
 
 [acus]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html#aurora-serverless-v2.how-it-works.capacity
 [aurora-serverless]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html
