@@ -65,7 +65,7 @@ specifying short names for your project and (optionally) service using the
 ## Inputs
 
 | Name                        | Description                                                                                                                                | Type           | Default        | Required |
-|-----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|----------------|----------------|----------|
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | -------------- | -------- |
 | logging_key_arn             | ARN of the KMS key for logging.                                                                                                            | `string`       | n/a            | yes      |
 | ingress_cidrs               | List of CIDR blocks to allow ingress. This is typically your private subnets.                                                              | `list(string)` | n/a            | yes      |
 | project                     | Name of the project.                                                                                                                       | `string`       | n/a            | yes      |
@@ -120,7 +120,7 @@ cluster_parameters = [
 ```
 
 | Name         | Description                                                         | Type     | Default       | Required |
-|--------------|---------------------------------------------------------------------|----------|---------------|----------|
+| ------------ | ------------------------------------------------------------------- | -------- | ------------- | -------- |
 | name         | Name of the parameter to set.                                       | `string` | n/a           | yes      |
 | value        | Value to set the parameter to.                                      | `string` | n/a           | yes      |
 | apply_method | How to apply the parameter. Can be `immediate` or `pending-reboot`. | `string` | `"immediate"` | no       |
@@ -164,7 +164,7 @@ security_group_rules = {
 > a bad actor.
 
 | Name                     | Description                                                               | Type           | Default                 | Required |
-|--------------------------|---------------------------------------------------------------------------|----------------|-------------------------|----------|
+| ------------------------ | ------------------------------------------------------------------------- | -------------- | ----------------------- | -------- |
 | description              | Description of the rule.                                                  | `string`       | `"Managed by OpenTofu"` | no       |
 | type                     | Type of rule. Can be `ingress` or `egress`.                               | `string`       | `"ingress"`             | no       |
 | protocol                 | Protocol to use. Valid values: `icmp`, `icmpv6`, `tcp`, `udp`, or `all`.  | `string`       | `"tcp"`                 | no       |
@@ -178,8 +178,9 @@ security_group_rules = {
 ## Outputs
 
 | Name             | Description                                      | Type     |
-|------------------|--------------------------------------------------|----------|
+| ---------------- | ------------------------------------------------ | -------- |
 | cluster_endpoint | DNS endpoint to connect to the database cluster. | `string` |
+| cluster_id       | ID of the RDS database cluster.                  | `string` |
 | secret_arn       | ARN of the secret holding database credentials.  | `string` |
 
 [acus]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html#aurora-serverless-v2.how-it-works.capacity
