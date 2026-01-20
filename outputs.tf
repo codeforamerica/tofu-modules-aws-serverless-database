@@ -3,6 +3,11 @@ output "cluster_endpoint" {
   value       = module.database.cluster_endpoint
 }
 
+output "cluster_id" {
+  description = "ID of the RDS database cluster."
+  value       = module.database.cluster_id
+}
+
 output "secret_arn" {
   description = "ARN of the secret containing the user credentials."
   value       = module.database.cluster_master_user_secret[0].secret_arn
