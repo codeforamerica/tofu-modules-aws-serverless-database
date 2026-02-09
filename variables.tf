@@ -4,6 +4,13 @@ variable "apply_immediately" {
   default     = false
 }
 
+variable "backup_namespace" {
+  type = string
+  description = "Namespace for database backups"
+  default = "codeforamerica"
+  
+}
+
 variable "backup_retention_period" {
   type        = number
   description = "Number of days to retain automatic backups, between 1 and 35."
