@@ -8,7 +8,8 @@ module "backup_vault" {
 
   namespace  = var.backup_namespace
   stage      = var.environment
-  name       = local.prefix
+  name       = local.short_prefix
+  vault_name = local.prefix
   attributes = ["database_backup_vault"]
 
   tags = {
@@ -27,7 +28,8 @@ module "backup" {
 
   namespace  = var.backup_namespace
   stage      = var.environment
-  name       = local.prefix
+  name       = local.short_prefix
+  vault_name = local.prefix
   attributes = ["database_back"]
 
   plan_name_suffix = "aws-backup-daily"
