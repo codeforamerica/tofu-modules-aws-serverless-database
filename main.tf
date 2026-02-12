@@ -67,5 +67,5 @@ module "database" {
     for i in range(var.instances) : (i + 1) => {}
   }
 
-  tags = var.tags
+  tags = var.configure_aws_backup ? merge(var.tags, { "aws-backup/rds" = "daily" }) : var.tags
 }

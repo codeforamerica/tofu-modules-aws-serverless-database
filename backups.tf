@@ -1,20 +1,11 @@
-module "cross_region_vault" {
-  for_each = var.configure_aws_backup ? toset(["this"]) : toset([])
-  source   = "cloudposse/backup/aws"
-  version  = ">= 1.1.1"
+resource "aws_backup_vault" "cross_region_vault" {
+  for_each = var.configure_aws_backup && var.backup_replica_region != null ? toset(["this"]) : toset([])
 
-  providers = {
-    aws = aws.backup
-  }
+  force_destroy = var.force_delete
+  name = join("-", compact([var.backup_namespace, var.environment, var.project, var.service, "replica"]))
+  region = var.backup_replica_region
 
-  namespace  = var.backup_namespace
-  stage      = var.environment
-  name       = var.project
-  attributes = var.service != "" ? [var.service, "replica"] : ["replica"]
-
-  vault_enabled    = true
-  iam_role_enabled = true
-  plan_enabled     = false
+  tags = var.tags
 }
 
 module "backup" {
@@ -50,10 +41,12 @@ module "backup" {
     }
 
     copy_action = {
-      destination_vault_arn = module.cross_region_vault["this"].backup_vault_arn
+      destination_vault_arn = var.backup_replica_region != null ? aws_backup_vault.cross_region_vault["this"].arn : null
       lifecycle = {
         delete_after = schedule.retention
       }
     }
   }]
+
+  tags = var.tags
 }

@@ -22,6 +22,17 @@ variable "backup_namespace" {
 
 }
 
+variable "backup_replica_region" {
+  type        = string
+  description = <<-EOT
+    Region to use for cross-region backup replication. If not specified, no
+    replica will be created. If specified, the module will create a backup vault
+    in the specified region and configure the backup schedules to replicate to
+    the replica vault.
+    EOT
+  default     = null
+}
+
 variable "backup_retention_period" {
   type        = number
   description = "Deprecated: Use `automatic_backup_retention_period` instead."
