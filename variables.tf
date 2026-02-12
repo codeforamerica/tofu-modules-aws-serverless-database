@@ -4,22 +4,64 @@ variable "apply_immediately" {
   default     = false
 }
 
-variable "backup_namespace" {
-  type = string
-  description = "Namespace for database backups"
-  default = "codeforamerica"
-  
-}
-
-variable "backup_retention_period" {
+variable "automatic_backup_retention_period" {
   type        = number
   description = "Number of days to retain automatic backups, between 1 and 35."
   default     = 31
 
   validation {
-    condition     = var.backup_retention_period > 0 && var.backup_retention_period < 36
+    condition     = var.automatic_backup_retention_period > 0 && var.automatic_backup_retention_period < 36
+    error_message = "Automatic backup retention must be between 1 and 35 days."
+  }
+}
+
+variable "backup_namespace" {
+  type        = string
+  description = "Namespace for database backups"
+  default     = "cfa"
+
+}
+
+variable "backup_retention_period" {
+  type        = number
+  description = "Deprecated: Use `automatic_backup_retention_period` instead."
+  default     = null
+  deprecated  = "Use automatic_backup_retention_period instead."
+
+  validation {
+    condition     = var.backup_retention_period == null || (var.backup_retention_period > 0 && var.backup_retention_period < 36)
     error_message = "Backup retention must be between 1 and 35 days."
   }
+}
+
+variable "backup_schedules" {
+  type = list(object({
+    name              = string
+    schedule          = string
+    start_window      = number
+    completion_window = number
+    retention         = number
+  }))
+  description = "Backup schedules to create for the database cluster."
+  default = [{
+    name              = "daily"
+    schedule          = "cron(0 18 ? * * *)"
+    start_window      = 320
+    completion_window = 1440
+    retention         = 31
+    }, {
+    name              = "monthly"
+    schedule          = "cron(0 18 1 * ? *)"
+    start_window      = 320
+    completion_window = 1440
+    retention         = 395
+    }, {
+    name              = "yearly"
+    schedule          = "cron(0 18 1 1 ? *)"
+    start_window      = 320
+    completion_window = 1440
+    retention         = 1095
+  }]
 }
 
 variable "cluster_parameters" {
@@ -30,6 +72,14 @@ variable "cluster_parameters" {
   }))
   description = "Parameters to be set on the database cluster."
   default     = []
+}
+
+variable "configure_aws_backup" {
+  type        = bool
+  description = <<-EOT
+    Whether to configure AWS Backup with the defined backup schedules.
+    EOT
+  default     = false
 }
 
 variable "enable_data_api" {
