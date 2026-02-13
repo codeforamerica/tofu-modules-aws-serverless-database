@@ -49,8 +49,8 @@ variable "backup_schedules" {
   type = list(object({
     name              = string
     schedule          = string
-    start_window      = number
-    completion_window = number
+    start_window      = optional(number, 320)
+    completion_window = optional(number, 1440)
     retention         = number
   }))
   description = "Backup schedules to create for the database cluster."
