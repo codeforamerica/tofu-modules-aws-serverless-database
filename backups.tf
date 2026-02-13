@@ -4,7 +4,7 @@ resource "aws_backup_vault" "cross_region_vault" {
   force_destroy = var.force_delete
   name          = join("-", compact([var.backup_namespace, var.environment, var.project, var.service, "replica"]))
   region        = var.backup_replica_region
-  kms_key_arn   = aws_kms_key.backups["this"].arn
+  kms_key_arn   = aws_kms_replica_key.replica["this"].arn
 
   tags = var.tags
 }
