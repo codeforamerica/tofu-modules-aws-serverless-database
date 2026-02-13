@@ -36,5 +36,5 @@ resource "aws_kms_alias" "backups" {
   for_each = var.configure_aws_backup ? toset(["this"]) : toset([])
 
   name          = "alias/${var.project}/${var.environment}/${var.service != "" ? "${var.service}/" : ""}backups"
-  target_key_id = aws_kms_key.backups.id
+  target_key_id = aws_kms_key.backups["this"].id
 }
