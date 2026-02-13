@@ -1,0 +1,22 @@
+Version: "2012-10-17"
+Statement:
+- Sid: Enable IAM User Permissions
+  Effect: Allow
+  Principal:
+    AWS: arn:${partition}:iam::${account_id}:root
+  Action: kms:*
+  Resource: "*"
+- Sid: Grant access to AWS Backup
+  Effect: Allow
+  Principal:
+    AWS: arn:${partition}:iam::${account_id}:root
+  Action:
+    - kms:CreateGrant
+  Resource: "*"
+  Condition:
+    ForAnyValue:StringEquals:
+      kms:EncryptionContextKeys: aws:backup:backup-vault
+    Bool:
+      kms:GrantIsForAWSResource: true
+    StringLike:
+      kms:ViaService: backup.*.amazonaws.com

@@ -1,4 +1,6 @@
 locals {
+  auto_backup_retention = coalesce(var.automatic_backup_retention_period, var.backup_retention_period)
+
   prefix        = "${var.project}-${var.environment}${var.service != "" ? "-${var.service}" : ""}"
   port          = var.engine == "postgresql" ? 5432 : 3306
   project_short = var.project_short != "" ? var.project_short : var.project

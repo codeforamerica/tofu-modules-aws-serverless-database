@@ -1,3 +1,18 @@
+output "backup_key_arn" {
+  description = "ARN of the KMS key for backups, if created."
+  value       = var.configure_aws_backup ? aws_kms_key.backups["this"].arn : null
+}
+
+output "backup_vault_arn" {
+  description = "ARN of the backup vault, if created."
+  value       = var.configure_aws_backup ? module.backup["this"].backup_vault_arn : null
+}
+
+output "backup_vault_replica_arn" {
+  description = "ARN of the backup vault replica, if created."
+  value       = var.configure_aws_backup && var.backup_replica_region != null ? aws_backup_vault.cross_region_vault["this"].arn : null
+}
+
 output "cluster_endpoint" {
   description = "Endpoint of the RDS database endpoint to connect to."
   value       = module.database.cluster_endpoint
