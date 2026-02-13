@@ -56,19 +56,19 @@ variable "backup_schedules" {
   description = "Backup schedules to create for the database cluster."
   default = [{
     name              = "daily"
-    schedule          = "cron(0 18 ? * * *)"
+    schedule          = "cron(0 9 ? * * *)"
     start_window      = 320
     completion_window = 1440
     retention         = 31
     }, {
     name              = "monthly"
-    schedule          = "cron(0 18 1 * ? *)"
+    schedule          = "cron(0 9 1 * ? *)"
     start_window      = 320
     completion_window = 1440
     retention         = 395
     }, {
     name              = "yearly"
-    schedule          = "cron(0 18 1 1 ? *)"
+    schedule          = "cron(0 9 1 1 ? *)"
     start_window      = 320
     completion_window = 1440
     retention         = 1095

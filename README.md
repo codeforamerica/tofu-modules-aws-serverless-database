@@ -132,19 +132,23 @@ module "database" {
 
 This will configure AWS Backup to use the following default schedule:
 
+> [!NOTE]
+> Cron schedules are evaluated as UTC. With the defaults below, ackups are
+> scheduled for 9am UTC/4am EST/1am PST.
+
 ```yaml
 - name: daily
-  schedule: cron(0 18 ? * * *)
+  schedule: cron(0 9 ? * * *)
   start_window: 320
   completion_window: 1440
   retention: 31
 - name: monthly
-  schedule: cron(0 18 1 * ? *)
+  schedule: cron(0 9 1 * ? *)
   start_window: 320
   completion_window: 1440
   retention: 395
 - name: yearly
-  schedule: cron(0 18 1 1 ? *)
+  schedule: cron(0 9 1 1 ? *)
   start_window: 320
   completion_window: 1440
   retention: 1095
@@ -178,7 +182,7 @@ backup_replica_region = "us-west-2"
 | Name              | Description                                                                                                        | Type     | Default | Required |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------ | -------- | ------- | -------- |
 | name              | Name of schedule.                                                                                                  | `string` | n/a     | yes      |
-| schdule           | The cron schedule on which to create the backup.                                                                   | `string` | n/a     | yes      |
+| schdule           | The cron schedule on which to create the backup, evaluated as UTC.                                                 | `string` | n/a     | yes      |
 | retention         | Number of days to retain the backup before it is deleted.                                                          | `number` | n/a     | yes      |
 | completion_window | Number of minutes after a backup has sucessfully started in which it must complete before being cancelled.         | `number` | `1440`  | no       |
 | start_window      | Number of minutes after the scheduled time in which the backup must be succesfully started before being cancelled. | `numer`  | `320`   | no       |
