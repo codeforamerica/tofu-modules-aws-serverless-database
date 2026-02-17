@@ -103,18 +103,11 @@ specifying short names for your project and (optionally) service using the
 
 You can enable backups using [AWS Backup][aws-backup] by setting
 `configure_aws_backup` to true. When enabled, the module will create a backup
-vault in the current region, with a replica in another region.
-
-When enabling AWS Backup, you will need to specify an AWS provider to use for
-the replica valult. It should be specified as `aws.backup`. For example:
+vault in the current region.
 
 ```hcl
 module "database" {
   source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.4.0"
-
-  providers = {
-    aws.backup = aws.backup
-  }
 
   project     = "my-project"
   environment = "dev"
@@ -133,7 +126,7 @@ module "database" {
 This will configure AWS Backup to use the following default schedule:
 
 > [!NOTE]
-> Cron schedules are evaluated as UTC. With the defaults below, ackups are
+> Cron schedules are evaluated as UTC. With the defaults below, backups are
 > scheduled for 9am UTC/4am EST/1am PST.
 
 ```yaml
@@ -172,20 +165,20 @@ backup_schedules = [{
   }]
 ```
 
-Additioanlly, you can configure replication of backups to another region by
+Additionally, you can configure replication of backups to another region by
 setting `backup_replica_region`. If left empty, no replicas will be created.
 
 ```hcl
 backup_replica_region = "us-west-2"
 ```
 
-| Name              | Description                                                                                                        | Type     | Default | Required |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------ | -------- | ------- | -------- |
-| name              | Name of schedule.                                                                                                  | `string` | n/a     | yes      |
-| schdule           | The cron schedule on which to create the backup, evaluated as UTC.                                                 | `string` | n/a     | yes      |
-| retention         | Number of days to retain the backup before it is deleted.                                                          | `number` | n/a     | yes      |
-| completion_window | Number of minutes after a backup has sucessfully started in which it must complete before being cancelled.         | `number` | `1440`  | no       |
-| start_window      | Number of minutes after the scheduled time in which the backup must be succesfully started before being cancelled. | `numer`  | `320`   | no       |
+| Name              | Description                                                                                                         | Type     | Default | Required |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- | -------- | ------- | -------- |
+| name              | Name of schedule.                                                                                                   | `string` | n/a     | yes      |
+| schedule          | The cron schedule on which to create the backup, evaluated as UTC.                                                  | `string` | n/a     | yes      |
+| retention         | Number of days to retain the backup before it is deleted.                                                           | `number` | n/a     | yes      |
+| completion_window | Number of minutes after a backup has successfully started in which it must complete before being cancelled.         | `number` | `1440`  | no       |
+| start_window      | Number of minutes after the scheduled time in which the backup must be successfully started before being cancelled. | `number` | `320`   | no       |
 
 ### cluster_parameters
 
@@ -274,7 +267,7 @@ security_group_rules = {
 | ------------------------ | --------------------------------------------------- | -------- |
 | backup_key_arn           | ARN of the primary KMS key for backups, if created. | `string` |
 | backup_vault_arn         | ARN of the backup vault, if created.                | `string` |
-| backup_vault_replica_arn | ARN of the backup vault replica, if created.        | `stirng` |
+| backup_vault_replica_arn | ARN of the backup vault replica, if created.        | `string` |
 | cluster_endpoint         | DNS endpoint to connect to the database cluster.    | `string` |
 | cluster_id               | ID of the RDS database cluster.                     | `string` |
 | cluster_resource_id      | Resource ID of the RDS database cluster.            | `string` |
