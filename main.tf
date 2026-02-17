@@ -26,7 +26,7 @@ module "database" {
   security_group_name                 = "${local.prefix}-database-"
   security_group_use_name_prefix      = true
   iam_database_authentication_enabled = var.iam_authentication
-  backup_retention_period             = var.backup_retention_period
+  backup_retention_period             = local.auto_backup_retention
 
   vpc_id               = var.vpc_id
   security_group_rules = local.security_group_rules
@@ -46,8 +46,8 @@ module "database" {
 
   monitoring_interval = 60
 
-  apply_immediately   = var.apply_immediately
-  skip_final_snapshot = var.skip_final_snapshot
+  apply_immediately         = var.apply_immediately
+  skip_final_snapshot       = var.skip_final_snapshot
   final_snapshot_identifier = "${local.prefix}-final"
 
   serverlessv2_scaling_configuration = {
@@ -67,5 +67,6 @@ module "database" {
     for i in range(var.instances) : (i + 1) => {}
   }
 
-  tags = var.tags
+  cluster_tags = var.configure_aws_backup ? { "aws-backup/rds" = "daily" } : {}
+  tags         = var.tags
 }

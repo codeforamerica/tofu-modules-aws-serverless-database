@@ -64,35 +64,121 @@ specifying short names for your project and (optionally) service using the
 
 ## Inputs
 
-| Name                        | Description                                                                                                                                | Type           | Default        | Required |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | -------------- | -------- |
-| logging_key_arn             | ARN of the KMS key for logging.                                                                                                            | `string`       | n/a            | yes      |
-| ingress_cidrs               | List of CIDR blocks to allow ingress. This is typically your private subnets.                                                              | `list(string)` | n/a            | yes      |
-| project                     | Name of the project.                                                                                                                       | `string`       | n/a            | yes      |
-| secrets_key_arn             | ARN of the KMS key for secrets. This will be used to encrypt database credentials.                                                         | `string`       | n/a            | yes      |
-| subnets                     | List of subnet ids the database instances may be placed in.                                                                                | `list(string)` | n/a            | yes      |
-| vpc_id                      | Id of the VPC to launch the database cluster into.                                                                                         | `string`       | n/a            | yes      |
-| apply_immediately           | Whether to apply changes immediately rather than during the next maintenance window. WARNING: This may result in a restart of the cluster! | `bool`         | `false`        | no       |
-| backup_retention_period     | Number of days to retain automatic backups, between 1 and 35.                                                                              | `number`       | `31`           | no       |
-| [cluster_parameters]        | Parameters to be set on the database cluster.                                                                                              | `list(object)` | `[]`           | no       |
-| enable_data_api             | Whether to enable the [Data API][data-api] for the database cluster.                                                                       | `bool`         | `false`        | no       |
-| engine                      | Database engine to use for the cluster. Valid values are 'mysql' and 'postgresql'.                                                         | `string`       | `"postgresql"` | no       |
-| engine_version              | Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime.        | `string`       | `null`         | no       |
-| environment                 | Environment for the project.                                                                                                               | `string`       | `"dev"`        | no       |
-| force_delete                | Force deletion of resources. If changing to true, be sure to apply before destroying.                                                      | `bool`         | `false`        | no       |
-| iam_authentication          | Whether to enable IAM authentication for the database cluster.                                                                             | `bool`         | `true`         | no       |
-| instances                   | Number of instances to create in the database cluster.                                                                                     | `number`       | `2`            | no       |
-| key_recovery_period         | Recovery period for deleted KMS keys in days. Must be between 7 and 30.                                                                    | `number`       | `30`           | no       |
-| min_capacity                | Minimum capacity for the serverless cluster in ACUs.                                                                                       | `number`       | `2`            | no       |
-| max_capacity                | Maximum capacity for the serverless cluster in ACUs.                                                                                       | `number`       | `10`           | no       |
-| password_rotation_frequency | Number of days between automatic password rotations for the root user Set to `0` to disable automatic rotation.                            | `number`       | `30`           | no       |
-| project_short               | Short name for the project. Used in resource names with character limits. Defaults to project.                                             | `string`       | `var.project`  | no       |
-| service                     | Optional service that these resources are supporting. Example: 'api', 'web', 'worker'                                                      | `string`       | `""`           | no       |
-| service_short               | Short name for the service. Used in resource names with character limits. Defaults to service.                                             | `string`       | `var.service`  | no       |
-| [security_group_rules]      | Security group rules to control cluster ingress and egress.                                                                                | `map(object)`  | `{}`           | no       |
-| skip_final_snapshot         | Whether to skip the final snapshot when destroying the database cluster.                                                                   | `bool`         | `false`        | no       |
-| snapshot_identifier         | Optional name or ARN of the snapshot to restore the cluster from. Only applicable on create.                                               | `bool`         | `false`        | no       |
-| tags                        | Optional tags to be applied to all resources.                                                                                              | `map(string)`  | `{}`           | no       |
+| Name                              | Description                                                                                                                                                                                                                                        | Type           | Default        | Required |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | -------------- | -------- |
+| logging_key_arn                   | ARN of the KMS key for logging.                                                                                                                                                                                                                    | `string`       | n/a            | yes      |
+| ingress_cidrs                     | List of CIDR blocks to allow ingress. This is typically your private subnets.                                                                                                                                                                      | `list(string)` | n/a            | yes      |
+| project                           | Name of the project.                                                                                                                                                                                                                               | `string`       | n/a            | yes      |
+| secrets_key_arn                   | ARN of the KMS key for secrets. This will be used to encrypt database credentials.                                                                                                                                                                 | `string`       | n/a            | yes      |
+| subnets                           | List of subnet ids the database instances may be placed in.                                                                                                                                                                                        | `list(string)` | n/a            | yes      |
+| vpc_id                            | Id of the VPC to launch the database cluster into.                                                                                                                                                                                                 | `string`       | n/a            | yes      |
+| apply_immediately                 | Whether to apply changes immediately rather than during the next maintenance window. WARNING: This may result in a restart of the cluster!                                                                                                         | `bool`         | `false`        | no       |
+| automatic_backup_retention_period | Number of days to retain automatic backups, between 1 and 35.                                                                                                                                                                                      | `number`       | `31`           | no       |
+| backup_namespace                  | Namespace for backups, prefixed to vault names to produce globally unique names.                                                                                                                                                                   | `string`       | `cfa`          | no       |
+| backup_replica_region             | Region to use for cross-region backup replication. If not specified, no replica will be created. If specified, the module will create a backup vault in the specified region and configure the backup schedules to replicate to the replica vault. | `string`       | `null`         | no       |
+| backup_retention_period           | Deprecated: Use `automatic_backup_retention_period` instead.                                                                                                                                                                                       | `number`       | `null`         | no       |
+| [backup_schedules]                | Backup schedules to create for the database cluster.                                                                                                                                                                                               | `list(object)` | `list(object)` | no       |
+| [cluster_parameters]              | Parameters to be set on the database cluster.                                                                                                                                                                                                      | `list(object)` | `[]`           | no       |
+| configure_aws_backup              | Whether to configure AWS Backup with the defined backup schedules.                                                                                                                                                                                 | `bool`         | `false`        | no       |
+| enable_data_api                   | Whether to enable the [Data API][data-api] for the database cluster.                                                                                                                                                                               | `bool`         | `false`        | no       |
+| engine                            | Database engine to use for the cluster. Valid values are 'mysql' and 'postgresql'.                                                                                                                                                                 | `string`       | `"postgresql"` | no       |
+| engine_version                    | Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime.                                                                                                                | `string`       | `null`         | no       |
+| environment                       | Environment for the project.                                                                                                                                                                                                                       | `string`       | `"dev"`        | no       |
+| force_delete                      | Force deletion of resources. If changing to true, be sure to apply before destroying.                                                                                                                                                              | `bool`         | `false`        | no       |
+| iam_authentication                | Whether to enable IAM authentication for the database cluster.                                                                                                                                                                                     | `bool`         | `true`         | no       |
+| instances                         | Number of instances to create in the database cluster.                                                                                                                                                                                             | `number`       | `2`            | no       |
+| key_recovery_period               | Recovery period for deleted KMS keys in days. Must be between 7 and 30.                                                                                                                                                                            | `number`       | `30`           | no       |
+| min_capacity                      | Minimum capacity for the serverless cluster in ACUs.                                                                                                                                                                                               | `number`       | `2`            | no       |
+| max_capacity                      | Maximum capacity for the serverless cluster in ACUs.                                                                                                                                                                                               | `number`       | `10`           | no       |
+| password_rotation_frequency       | Number of days between automatic password rotations for the root user Set to `0` to disable automatic rotation.                                                                                                                                    | `number`       | `30`           | no       |
+| project_short                     | Short name for the project. Used in resource names with character limits. Defaults to project.                                                                                                                                                     | `string`       | `var.project`  | no       |
+| service                           | Optional service that these resources are supporting. Example: 'api', 'web', 'worker'                                                                                                                                                              | `string`       | `""`           | no       |
+| service_short                     | Short name for the service. Used in resource names with character limits. Defaults to service.                                                                                                                                                     | `string`       | `var.service`  | no       |
+| [security_group_rules]            | Security group rules to control cluster ingress and egress.                                                                                                                                                                                        | `map(object)`  | `{}`           | no       |
+| skip_final_snapshot               | Whether to skip the final snapshot when destroying the database cluster.                                                                                                                                                                           | `bool`         | `false`        | no       |
+| snapshot_identifier               | Optional name or ARN of the snapshot to restore the cluster from. Only applicable on create.                                                                                                                                                       | `bool`         | `false`        | no       |
+| tags                              | Optional tags to be applied to all resources.                                                                                                                                                                                                      | `map(string)`  | `{}`           | no       |
+
+### backup_schedules
+
+You can enable backups using [AWS Backup][aws-backup] by setting
+`configure_aws_backup` to true. When enabled, the module will create a backup
+vault in the current region.
+
+```hcl
+module "database" {
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.4.0"
+
+  project     = "my-project"
+  environment = "dev"
+  service     = "web"
+
+  logging_key_arn = module.logging.kms_key_arn
+  secrets_key_arn = module.secrets.kms_key_arn
+  vpc_id          = module.vpc.vpc_id
+  subnets         = module.vpc.private_subnets
+  ingress_cidrs   = module.vpc.private_subnets_cidr_blocks
+
+  configure_aws_backup = true
+}
+```
+
+This will configure AWS Backup to use the following default schedule:
+
+> [!NOTE]
+> Cron schedules are evaluated as UTC. With the defaults below, backups are
+> scheduled for 9am UTC/4am EST/1am PST.
+
+```yaml
+- name: daily
+  schedule: cron(0 9 ? * * *)
+  start_window: 320
+  completion_window: 1440
+  retention: 31
+- name: monthly
+  schedule: cron(0 9 1 * ? *)
+  start_window: 320
+  completion_window: 1440
+  retention: 395
+- name: yearly
+  schedule: cron(0 9 1 1 ? *)
+  start_window: 320
+  completion_window: 1440
+  retention: 1095
+```
+
+You can override the default schedule by setting `backup_schedules`:
+
+```hcl
+backup_schedules = [{
+    name = "daily"
+    schedule = "cron(0 4 ? * * *)"
+    start_window = 320
+    completion_window = 1440
+    retention = 8
+  }, {
+    name = "weekly"
+    schedule = "cron(0 4 * * * 0)"
+    start_window = 320
+    completion_window = 1440
+    retention = 53
+  }]
+```
+
+Additionally, you can configure replication of backups to another region by
+setting `backup_replica_region`. If left empty, no replicas will be created.
+
+```hcl
+backup_replica_region = "us-west-2"
+```
+
+| Name              | Description                                                                                                         | Type     | Default | Required |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- | -------- | ------- | -------- |
+| name              | Name of schedule.                                                                                                   | `string` | n/a     | yes      |
+| schedule          | The cron schedule on which to create the backup, evaluated as UTC.                                                  | `string` | n/a     | yes      |
+| retention         | Number of days to retain the backup before it is deleted.                                                           | `number` | n/a     | yes      |
+| completion_window | Number of minutes after a backup has successfully started in which it must complete before being cancelled.         | `number` | `1440`  | no       |
+| start_window      | Number of minutes after the scheduled time in which the backup must be successfully started before being cancelled. | `number` | `320`   | no       |
 
 ### cluster_parameters
 
@@ -177,15 +263,20 @@ security_group_rules = {
 
 ## Outputs
 
-| Name                | Description                                      | Type     |
-| ------------------- | ------------------------------------------------ | -------- |
-| cluster_endpoint    | DNS endpoint to connect to the database cluster. | `string` |
-| cluster_id          | ID of the RDS database cluster.                  | `string` |
-| cluster_resource_id | Resource ID of the RDS database cluster.         | `string` |
-| secret_arn          | ARN of the secret holding database credentials.  | `string` |
+| Name                     | Description                                         | Type     |
+| ------------------------ | --------------------------------------------------- | -------- |
+| backup_key_arn           | ARN of the primary KMS key for backups, if created. | `string` |
+| backup_vault_arn         | ARN of the backup vault, if created.                | `string` |
+| backup_vault_replica_arn | ARN of the backup vault replica, if created.        | `string` |
+| cluster_endpoint         | DNS endpoint to connect to the database cluster.    | `string` |
+| cluster_id               | ID of the RDS database cluster.                     | `string` |
+| cluster_resource_id      | Resource ID of the RDS database cluster.            | `string` |
+| secret_arn               | ARN of the secret holding database credentials.     | `string` |
 
 [acus]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html#aurora-serverless-v2.how-it-works.capacity
 [aurora-serverless]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html
+[aws-backup]: https://docs.aws.amazon.com/aws-backup/latest/devguide/whatisbackup.html
+[backup_schedules]: #backup_schedules
 [badge-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml/badge.svg
 [badge-release]: https://img.shields.io/github/v/release/codeforamerica/tofu-modules-aws-serverless-database?logo=github&label=Latest%20Release
 [code-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml
