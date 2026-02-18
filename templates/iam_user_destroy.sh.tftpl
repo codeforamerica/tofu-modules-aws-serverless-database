@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+USERNAME="${username}"
+CLUSTER_ARN="${cluster_arn}"
+SECRET_ARN="${secret_arn}"
+REGION="${region}"
+ENGINE="${engine}"
+
+run_sql() {
+  local database="$1"
+  local sql="$2"
+  aws rds-data execute-statement \
+    --region        "$REGION" \
+    --resource-arn  "$CLUSTER_ARN" \
+    --secret-arn    "$SECRET_ARN" \
+    --database      "$database" \
+    --sql           "$sql" \
+    --output        json > /dev/null || echo "Warning: SQL failed (cluster may already be gone), continuing."
+}
+
+if [ "$ENGINE" = "mysql" ]; then
+  run_sql "mysql" "DROP USER IF EXISTS '$USERNAME'@'%';"
+  run_sql "mysql" "FLUSH PRIVILEGES;"
+
+elif [ "$ENGINE" = "postgresql" ]; then
+  run_sql "postgres" "REASSIGN OWNED BY \"$USERNAME\" TO \"postgres\";"
+  run_sql "postgres" "DROP OWNED BY \"$USERNAME\";"
+  run_sql "postgres" "DROP USER IF EXISTS \"$USERNAME\";"
+fi

@@ -139,6 +139,39 @@ variable "iam_authentication" {
   default     = true
 }
 
+variable "iam_users" {
+  type = map(object({
+    databases  = optional(list(string), [])
+    privileges = optional(string, "all")
+  }))
+  description = <<-EOT
+    Map of IAM database users to create on the cluster. The map key becomes the
+    database username. Options per user:
+      - databases:  List of database names to grant access to. An empty list means
+                    all databases (MySQL: *.*, PostgreSQL: public schema in the
+                    default 'postgres' database only).
+      - privileges: "all" or "readonly". Defaults to "all".
+    Requires iam_authentication = true and the AWS CLI on the Terraform runner.
+    EOT
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for username, _ in var.iam_users :
+      can(regex("^[a-zA-Z_][a-zA-Z0-9_]{0,62}$", username))
+    ])
+    error_message = "IAM user names must start with a letter or underscore and contain only letters, digits, or underscores (max 63 characters)."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, user in var.iam_users :
+      contains(["all", "readonly"], user.privileges)
+    ])
+    error_message = "IAM user privileges must be \"all\" or \"readonly\"."
+  }
+}
+
 variable "ingress_cidrs" {
   type        = list(string)
   description = "List of CIDR blocks to allow ingress. This is typically your private subnets."
