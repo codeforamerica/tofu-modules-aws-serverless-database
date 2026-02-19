@@ -6,6 +6,7 @@ CLUSTER_ARN="${cluster_arn}"
 SECRET_ARN="${secret_arn}"
 REGION="${region}"
 ENGINE="${engine}"
+DATABASES_CSV="${databases_csv}"
 
 run_sql() {
   local database="$1"
@@ -24,7 +25,24 @@ if [ "$ENGINE" = "mysql" ]; then
   run_sql "mysql" "FLUSH PRIVILEGES;"
 
 elif [ "$ENGINE" = "postgresql" ]; then
-  run_sql "postgres" "REASSIGN OWNED BY \"$USERNAME\" TO \"postgres\";"
-  run_sql "postgres" "DROP OWNED BY \"$USERNAME\";"
+  # Revoke the rds_iam role grant made during creation.
+  run_sql "postgres" "REVOKE rds_iam FROM \"$USERNAME\";"
+
+  if [ -z "$DATABASES_CSV" ]; then
+    # Mirror the grants made against the default 'postgres' database.
+    run_sql "postgres" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM \"$USERNAME\";"
+    run_sql "postgres" "REVOKE ALL ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"
+    run_sql "postgres" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
+    run_sql "postgres" "REVOKE CONNECT ON DATABASE \"postgres\" FROM \"$USERNAME\";"
+  else
+    IFS=',' read -ra DBS <<< "$DATABASES_CSV"
+    for DB in "$${DBS[@]}"; do
+      run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE ALL ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
+    done
+  fi
+
   run_sql "postgres" "DROP USER IF EXISTS \"$USERNAME\";"
 fi
