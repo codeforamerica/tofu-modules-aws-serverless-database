@@ -4,7 +4,7 @@ resource "aws_iam_policy" "iam_db_user" {
   name        = join("-", [local.prefix, "db", each.key])
   description = "Allows IAM authentication to the ${local.prefix} Aurora cluster as \"${each.key}\"."
 
-  policy = jsonencode(yamldecode(templatefile("${path.module}/templates/iam-user-policy.json.tftpl", {
+  policy = jsonencode(yamldecode(templatefile("${path.module}/templates/iam-user-policy.yaml.tftpl", {
     account : data.aws_caller_identity.identity.account_id,
     cluster_id : module.database.cluster_resource_id
     region : data.aws_region.current.region,
