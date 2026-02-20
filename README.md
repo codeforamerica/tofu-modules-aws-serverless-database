@@ -81,19 +81,20 @@ specifying short names for your project and (optionally) service using the
 | [cluster_parameters]              | Parameters to be set on the database cluster.                                                                                                                                                                                                      | `list(object)` | `[]`           | no       |
 | configure_aws_backup              | Whether to configure AWS Backup with the defined backup schedules.                                                                                                                                                                                 | `bool`         | `false`        | no       |
 | enable_data_api                   | Whether to enable the [Data API][data-api] for the database cluster.                                                                                                                                                                               | `bool`         | `false`        | no       |
-| engine                            | Database engine to use for the cluster. Valid values are 'mysql' and 'postgresql'.                                                                                                                                                                 | `string`       | `"postgresql"` | no       |
+| engine                            | Database engine to use for the cluster. Valid values are `"mysql"` and `"postgresql"`.                                                                                                                                                             | `string`       | `"postgresql"` | no       |
 | engine_version                    | Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime.                                                                                                                | `string`       | `null`         | no       |
 | environment                       | Environment for the project.                                                                                                                                                                                                                       | `string`       | `"dev"`        | no       |
 | force_delete                      | Force deletion of resources. If changing to true, be sure to apply before destroying.                                                                                                                                                              | `bool`         | `false`        | no       |
 | iam_authentication                | Whether to enable IAM authentication for the database cluster.                                                                                                                                                                                     | `bool`         | `true`         | no       |
+| [iam_db_users]                    | Map of IAM database users to create on the cluster. The map key becomes the database username. Requires `iam_authentication = true` and the AWS CLI must be installed on the OpenTofu runner.                                                      | `map(object)`  | `{}`           | no       |
 | instances                         | Number of instances to create in the database cluster.                                                                                                                                                                                             | `number`       | `2`            | no       |
-| key_recovery_period               | Recovery period for deleted KMS keys in days. Must be between 7 and 30.                                                                                                                                                                            | `number`       | `30`           | no       |
+| key_recovery_period               | Recovery period for deleted KMS keys in days. Must be between `7` and `30`.                                                                                                                                                                        | `number`       | `30`           | no       |
 | min_capacity                      | Minimum capacity for the serverless cluster in ACUs.                                                                                                                                                                                               | `number`       | `2`            | no       |
 | max_capacity                      | Maximum capacity for the serverless cluster in ACUs.                                                                                                                                                                                               | `number`       | `10`           | no       |
 | password_rotation_frequency       | Number of days between automatic password rotations for the root user Set to `0` to disable automatic rotation.                                                                                                                                    | `number`       | `30`           | no       |
-| project_short                     | Short name for the project. Used in resource names with character limits. Defaults to project.                                                                                                                                                     | `string`       | `var.project`  | no       |
-| service                           | Optional service that these resources are supporting. Example: 'api', 'web', 'worker'                                                                                                                                                              | `string`       | `""`           | no       |
-| service_short                     | Short name for the service. Used in resource names with character limits. Defaults to service.                                                                                                                                                     | `string`       | `var.service`  | no       |
+| project_short                     | Short name for the project. Used in resource names with character limits. Defaults to project.                                                                                                                                                     | `string`       | `""`           | no       |
+| service                           | Optional service that these resources are supporting. Example: `"api"`, `"web"`, `"worker"`. Used in resource names to differentiate from other services.                                                                                          | `string`       | `""`           | no       |
+| service_short                     | Short name for the service. Used in resource names with character limits. Defaults to the same value as `service`.                                                                                                                                 | `string`       | `""`           | no       |
 | [security_group_rules]            | Security group rules to control cluster ingress and egress.                                                                                                                                                                                        | `map(object)`  | `{}`           | no       |
 | skip_final_snapshot               | Whether to skip the final snapshot when destroying the database cluster.                                                                                                                                                                           | `bool`         | `false`        | no       |
 | snapshot_identifier               | Optional name or ARN of the snapshot to restore the cluster from. Only applicable on create.                                                                                                                                                       | `bool`         | `false`        | no       |
@@ -211,6 +212,47 @@ cluster_parameters = [
 | value        | Value to set the parameter to.                                      | `string` | n/a           | yes      |
 | apply_method | How to apply the parameter. Can be `immediate` or `pending-reboot`. | `string` | `"immediate"` | no       |
 
+### iam_db_users
+
+You can optionally create database users to be used for [IAM based
+authentication][iam-auth]. This allows your application(s) to connect to the
+database withtout managing a static password that needs to be rotated regularly.
+
+> [!NOTE]
+> To avoid needing to connect directly to the database, these users are managed
+> using [RDS Data API][data-api]. As a result, `enable_data_api` must be set to
+> `true` for this to succeed, and the OpenTofu runner must have the AWS CLI
+> installed.
+
+Provide a map of users, the keys of which will become the username. For example:
+
+```hcl
+enable_data_api = true
+iam_users       = {
+  "myapp" = {
+    privileges = "all"
+  },
+  "myapp_ro" = {
+    databases  = ["myapp", "myapp_queue"]
+    privileges = "readonly"
+  }
+}
+```
+
+To grant your resources the privledges to connect to the database as the user,
+an IAM policy is created for each user, and mapped to the username in the
+`iam_db_user_policy_arns` output. You can attach this policy to one or more IAM
+roles which are attached to your resources.
+
+> [!TIP]
+> You can also pass the policy ARN to another module that's responsible for
+> configuring your roles, such as our [aws_fargate_service] module.
+
+| Name       | Description                                                                                   | Type           | Default | Required |
+| ---------- | --------------------------------------------------------------------------------------------- | -------------- | ------- | -------- |
+| databases  | List of databases to grant the user access to. Leave empty to grant access to all databases.  | `list(string)` | `[]`    | No       |
+| privileges | Privledges to grant on the databases for the user. Valid values are `"all"` and `"readonly"`. | `string`       | `"all"` | No       |
+
 ### security_group_rules
 
 Security group rules control network access to the cluster. By default, the
@@ -263,24 +305,27 @@ security_group_rules = {
 
 ## Outputs
 
-| Name                     | Description                                         | Type     |
-| ------------------------ | --------------------------------------------------- | -------- |
-| backup_key_arn           | ARN of the primary KMS key for backups, if created. | `string` |
-| backup_vault_arn         | ARN of the backup vault, if created.                | `string` |
-| backup_vault_replica_arn | ARN of the backup vault replica, if created.        | `string` |
-| cluster_endpoint         | DNS endpoint to connect to the database cluster.    | `string` |
-| cluster_id               | ID of the RDS database cluster.                     | `string` |
-| cluster_resource_id      | Resource ID of the RDS database cluster.            | `string` |
-| secret_arn               | ARN of the secret holding database credentials.     | `string` |
+| Name                     | Description                                                                                               | Type          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- | ------------- |
+| backup_key_arn           | ARN of the primary KMS key for backups, if created.                                                       | `string`      |
+| backup_vault_arn         | ARN of the backup vault, if created.                                                                      | `string`      |
+| backup_vault_replica_arn | ARN of the backup vault replica, if created.                                                              | `string`      |
+| cluster_endpoint         | DNS endpoint to connect to the database cluster.                                                          | `string`      |
+| cluster_id               | ID of the RDS database cluster.                                                                           | `string`      |
+| cluster_resource_id      | Resource ID of the RDS database cluster.                                                                  | `string`      |
+| iam_db_user_policy_arns  | Map of IAM database username to the ARN of the IAM policy granting `rds-db:connect` access for that user. | `map(string)` |
+| secret_arn               | ARN of the secret holding database credentials.                                                           | `string`      |
 
 [acus]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html#aurora-serverless-v2.how-it-works.capacity
 [aurora-serverless]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html
 [aws-backup]: https://docs.aws.amazon.com/aws-backup/latest/devguide/whatisbackup.html
+[aws_fargate_service]: https://github.com/codeforamerica/tofu-modules-aws-fargate-service
 [backup_schedules]: #backup_schedules
-[badge-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml/badge.svg
-[badge-release]: https://img.shields.io/github/v/release/codeforamerica/tofu-modules-aws-serverless-database?logo=github&label=Latest%20Release
-[code-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml
+[badge-checks]: <https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml/badge.svg>
+[badge-release]: <https://img.shields.io/github/v/release/codeforamerica/tofu-modules-aws-serverless-database?logo=github&label=Latest%20Release>
+[code-checks]: <https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml>
 [cluster_parameters]: #cluster_parameters
-[data-api]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html
-[latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
+[data-api]: <https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html>
+[iam-auth]: <https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html>
+[latest-release]: <https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest>
 [security_group_rules]: #security_group_rules

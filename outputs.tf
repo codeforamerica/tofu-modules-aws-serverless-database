@@ -28,12 +28,15 @@ output "cluster_resource_id" {
   value       = module.database.cluster_resource_id
 }
 
+output "iam_db_user_policy_arns" {
+  description = <<-EOT
+      Map of IAM database username to the ARN of the IAM policy granting
+      `rds-db:connect` access for that user.
+    EOT
+  value       = { for username, policy in aws_iam_policy.iam_db_user : username => policy.arn }
+}
+
 output "secret_arn" {
   description = "ARN of the secret containing the user credentials."
   value       = module.database.cluster_master_user_secret[0].secret_arn
-}
-
-output "iam_user_policy_arns" {
-  description = "Map of IAM username to the ARN of the IAM policy granting rds-db:connect access for that user."
-  value       = { for username, policy in aws_iam_policy.iam_user : username => policy.arn }
 }

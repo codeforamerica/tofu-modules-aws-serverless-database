@@ -1,23 +1,22 @@
-resource "aws_iam_policy" "iam_user" {
-  for_each = var.iam_users
+resource "aws_iam_policy" "iam_db_user" {
+  for_each = var.iam_db_users
 
-  name        = "${local.prefix}-db-${each.key}"
-  description = "Allows IAM authentication to the ${local.prefix} Aurora cluster as '${each.key}'."
+  name        = join("-", [local.prefix, "db", each.key])
+  description = "Allows IAM authentication to the ${local.prefix} Aurora cluster as \"${each.key}\"."
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = "rds-db:connect"
-      Resource = "arn:${data.aws_partition.current.partition}:rds-db:${data.aws_region.current.name}:${data.aws_caller_identity.identity.account_id}:dbuser:${module.database.cluster_resource_id}/${each.key}"
-    }]
-  })
+  policy = jsonencode(yamldecode(templatefile("${path.module}/templates/iam-user-policy.json.tftpl", {
+    account : data.aws_caller_identity.identity.account_id,
+    cluster_id : module.database.cluster_resource_id
+    region : data.aws_region.current.region,
+    username : each.key,
+  })))
 
   tags = var.tags
 }
 
-resource "null_resource" "iam_user" {
-  for_each = var.iam_users
+resource "null_resource" "iam_db_user" {
+  for_each   = var.iam_db_users
+  depends_on = [module.database]
 
   triggers = {
     username    = each.key
@@ -30,7 +29,7 @@ resource "null_resource" "iam_user" {
   }
 
   provisioner "local-exec" {
-    command = templatefile("${path.module}/templates/iam_user_create.sh.tftpl", {
+    command = templatefile("${path.module}/templates/iam-user-create.sh.tftpl", {
       username      = each.key
       cluster_arn   = module.database.cluster_arn
       secret_arn    = module.database.cluster_master_user_secret[0].secret_arn
@@ -43,8 +42,8 @@ resource "null_resource" "iam_user" {
   }
 
   provisioner "local-exec" {
-    when    = destroy
-    command = templatefile("${path.module}/templates/iam_user_destroy.sh.tftpl", {
+    when = destroy
+    command = templatefile("${path.module}/templates/iam-user-destroy.sh.tftpl", {
       username      = self.triggers.username
       cluster_arn   = self.triggers.cluster_arn
       secret_arn    = self.triggers.secret_arn
@@ -54,6 +53,4 @@ resource "null_resource" "iam_user" {
     })
     interpreter = ["bash", "-c"]
   }
-
-  depends_on = [module.database]
 }

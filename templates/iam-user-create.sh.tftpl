@@ -1,17 +1,36 @@
 #!/usr/bin/env bash
+# This script uses the AWS RDS Data API to create and manage database users for
+# RDS authentication. This allows us to create users without needing to manage
+# passwords. Using the Data API prevents us from needing to connect directly to
+# the database to perform these operations.
+#
+# Note: This script is generated from a template and meant to be run by
+# OpenTofu's local-exec provisioner. It is not intended to be used directly.
 set -euo pipefail
 
-USERNAME="${username}"
+# Set variables from template inputs.
 CLUSTER_ARN="${cluster_arn}"
-SECRET_ARN="${secret_arn}"
-REGION="${region}"
 ENGINE="${engine}"
 DATABASES_CSV="${databases_csv}"
+REGION="${region}"
 PRIVILEGES="${privileges}"
+SECRET_ARN="${secret_arn}"
+USERNAME="${username}"
 
+#######################################
+# Run a SQL statement against the database using the RDS Data API.
+#
+# Globals:
+#   CLUSTER_ARN
+#   REGION
+#   SECRET_ARN
+# Arguments:
+#   Database to run the statement against, and the SQL statement to execute.
+#######################################
 run_sql() {
   local database="$1"
   local sql="$2"
+
   aws rds-data execute-statement \
     --region        "$REGION" \
     --resource-arn  "$CLUSTER_ARN" \
@@ -29,6 +48,8 @@ for attempt in $(seq 1 18); do
   sleep 10
 done
 
+# AWS Aurora supports both MySQL and PostgreSQL engines, which each have their
+# own syntax for user and privilege management.
 if [ "$ENGINE" = "mysql" ]; then
   GRANT_CLAUSE="ALL PRIVILEGES"
   [ "$PRIVILEGES" = "readonly" ] && GRANT_CLAUSE="SELECT"
@@ -36,6 +57,8 @@ if [ "$ENGINE" = "mysql" ]; then
   run_sql "mysql" \
     "CREATE USER IF NOT EXISTS '$USERNAME'@'%' IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS';"
 
+  # If DATABASES_CSV is empty, grant privileges globally. Otherwise, we want to
+  # limit privileges to the specified databases.
   if [ -z "$DATABASES_CSV" ]; then
     run_sql "mysql" "GRANT $GRANT_CLAUSE ON *.* TO '$USERNAME'@'%';"
   else
@@ -44,19 +67,19 @@ if [ "$ENGINE" = "mysql" ]; then
       run_sql "mysql" "GRANT $GRANT_CLAUSE ON \`$DB\`.* TO '$USERNAME'@'%';"
     done
   fi
-  run_sql "mysql" "FLUSH PRIVILEGES;"
 
+  # Flush privileges to ensure they take effect immediately.
+  run_sql "mysql" "FLUSH PRIVILEGES;"
 elif [ "$ENGINE" = "postgresql" ]; then
   GRANT_CLAUSE="ALL"
   [ "$PRIVILEGES" = "readonly" ] && GRANT_CLAUSE="SELECT"
 
-  # Create user (idempotent via DO block).
   run_sql "postgres" \
     "DO \$\$BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$USERNAME') THEN CREATE USER \"$USERNAME\"; END IF; END\$\$;"
-
-  # Grant the rds_iam role for IAM token authentication.
   run_sql "postgres" "GRANT rds_iam TO \"$USERNAME\";"
 
+  # If DATABASES_CSV is empty, grant privileges globally. Otherwise, we want to
+  # limit privileges to the specified databases.
   if [ -z "$DATABASES_CSV" ]; then
     run_sql "postgres" "GRANT CONNECT ON DATABASE \"postgres\" TO \"$USERNAME\";"
     run_sql "postgres" "GRANT USAGE ON SCHEMA public TO \"$USERNAME\";"
