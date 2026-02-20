@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# This script uses the AWS RDS Data API to delete database users created for
+# RDS authentication.
+#
+# Note: This script is generated from a template and meant to be run by
+# OpenTofu's local-exec provisioner. It is not intended to be used directly.
+set -euo pipefail
+
+# Set variables from template inputs.
+CLUSTER_ARN="${cluster_arn}"
+DATABASES_CSV="${databases_csv}"
+ENGINE="${engine}"
+REGION="${region}"
+SECRET_ARN="${secret_arn}"
+USERNAME="${username}"
+
+#######################################
+# Run a SQL statement against the database using the RDS Data API. If the
+# statement fails, we log a warning and continue as the database cluster
+# may already be deleted.
+#
+# Globals:
+#   CLUSTER_ARN
+#   REGION
+#   SECRET_ARN
+# Arguments:
+#   Database to run the statement against, and the SQL statement to execute.
+#######################################
+run_sql() {
+  local database="$1"
+  local sql="$2"
+
+  aws rds-data execute-statement \
+    --region        "$REGION" \
+    --resource-arn  "$CLUSTER_ARN" \
+    --secret-arn    "$SECRET_ARN" \
+    --database      "$database" \
+    --sql           "$sql" \
+    --output        json > /dev/null || echo "Warning: SQL failed (cluster may already be gone), continuing."
+}
+
+# AWS Aurora supports both MySQL and PostgreSQL engines, which each have their
+# own syntax for user and privilege management.
+if [ "$ENGINE" = "mysql" ]; then
+  run_sql "mysql" "DROP USER IF EXISTS '$USERNAME'@'%';"
+  run_sql "mysql" "FLUSH PRIVILEGES;"
+elif [ "$ENGINE" = "postgresql" ]; then
+  # For PostgreSQL, we need to revoke privileges before dropping the user.
+  # Otherwise, it may fail if the user is still attached to any databases.
+  run_sql "postgres" "REVOKE rds_iam FROM \"$USERNAME\";"
+  if [ -z "$DATABASES_CSV" ]; then
+    run_sql "postgres" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM \"$USERNAME\";"
+    run_sql "postgres" "REVOKE ALL ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"
+    run_sql "postgres" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
+    run_sql "postgres" "REVOKE CONNECT ON DATABASE \"postgres\" FROM \"$USERNAME\";"
+  else
+    IFS=',' read -ra DBS <<< "$DATABASES_CSV"
+    for DB in "$${DBS[@]}"; do
+      run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE ALL ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
+    done
+  fi
+
+  run_sql "postgres" "DROP USER IF EXISTS \"$USERNAME\";"
+fi

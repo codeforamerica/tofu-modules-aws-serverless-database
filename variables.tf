@@ -1,6 +1,9 @@
 variable "apply_immediately" {
   type        = bool
-  description = "Whether to apply changes immediately rather than during the next maintenance window."
+  description = <<-EOT
+    Whether to apply changes immediately rather than during the next maintenance
+    window.
+    EOT
   default     = false
 }
 
@@ -101,18 +104,24 @@ variable "enable_data_api" {
 
 variable "engine" {
   type        = string
-  description = "Database engine to use for the cluster. Valid values are 'mysql' and 'postgresql'."
+  description = <<-EOT
+    Database engine to use for the cluster. Valid values are `"mysql"` and
+    `"postgresql"`.
+    EOT
   default     = "postgresql"
 
   validation {
     condition     = contains(["mysql", "postgresql"], var.engine)
-    error_message = "Valid enginers are 'mysql' and 'postgresql'."
+    error_message = "Valid enginers are \"mysql\" and \"postgresql\"."
   }
 }
 
 variable "engine_version" {
   type        = string
-  description = "Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime."
+  description = <<-EOT
+    Version of the database engine to use. If left empty, the latest version
+    will be used. Changing this value will result in downtime.
+    EOT
   default     = null
 }
 
@@ -124,7 +133,10 @@ variable "environment" {
 
 variable "force_delete" {
   type        = bool
-  description = "Force deletion of resources. If changing to true, be sure to apply before destroying."
+  description = <<-EOT
+    Force deletion of resources. If changing to true, be sure to apply before
+    destroying.
+    EOT
   default     = false
 }
 
@@ -139,9 +151,51 @@ variable "iam_authentication" {
   default     = true
 }
 
+variable "iam_db_users" {
+  type = map(object({
+    databases  = optional(list(string), [])
+    privileges = optional(string, "all")
+  }))
+  description = <<-EOT
+    Map of IAM database users to create on the cluster. The map key becomes the
+    database username. Requires `iam_authentication = true` and the AWS CLI must
+    be installed on the OpenTofu runner.
+    EOT
+  default     = {}
+
+  validation {
+    condition = var.enable_data_api || length(var.iam_db_users) == 0
+    error_message = <<-EOT
+      IAM database users cannot be created unless enable_data_api is true.
+      EOT
+  }
+
+  validation {
+    condition = alltrue([
+      for username, _ in var.iam_db_users :
+      can(regex("^[a-zA-Z_][a-zA-Z0-9_]{0,62}$", username))
+    ])
+    error_message = <<-EOT
+        IAM user names must start with a letter or underscore and contain only
+        letters, digits, or underscores (max 63 characters).
+      EOT
+  }
+
+  validation {
+    condition = alltrue([
+      for _, user in var.iam_db_users :
+      contains(["all", "readonly"], user.privileges)
+    ])
+    error_message = "IAM user privileges must be \"all\" or \"readonly\"."
+  }
+}
+
 variable "ingress_cidrs" {
   type        = list(string)
-  description = "List of CIDR blocks to allow ingress. This is typically your private subnets."
+  description = <<-EOT
+    List of CIDR blocks to allow ingress. This is typically your private
+    subnets.
+    EOT
 }
 
 variable "instances" {
@@ -152,7 +206,9 @@ variable "instances" {
 variable "key_recovery_period" {
   type        = number
   default     = 30
-  description = "Recovery period for deleted KMS keys in days. Must be between 7 and 30."
+  description = <<-EOT
+    Recovery period for deleted KMS keys in days. Must be between `7` and `30`.
+    EOT
 
   validation {
     condition     = var.key_recovery_period > 6 && var.key_recovery_period < 31
@@ -174,7 +230,10 @@ variable "max_capacity" {
 
 variable "password_rotation_frequency" {
   type        = number
-  description = "Number of days between automatic password rotations for the root user. Set to 0 to disable automatic rotation."
+  description = <<-EOT
+    Number of days between automatic password rotations for the root user. Set
+    to `0` to disable automatic rotation.
+    EOT
   default     = 30
 }
 
@@ -185,13 +244,19 @@ variable "project" {
 
 variable "project_short" {
   type        = string
-  description = "Short name for the project. Used in resource names with character limits. Defaults to project."
+  description = <<-EOT
+    Short name for the project. Used in resource names with character limits.
+    Defaults to project.
+    EOT
   default     = ""
 }
 
 variable "secrets_key_arn" {
   type        = string
-  description = "ARN of the KMS key for secrets. This will be used to encrypt database credentials."
+  description = <<-EOT
+    ARN of the KMS key for secrets. This will be used to encrypt database
+    credentials.
+    EOT
 }
 
 variable "security_group_rules" {
@@ -212,25 +277,37 @@ variable "security_group_rules" {
 
 variable "service" {
   type        = string
-  description = "Optional service that these resources are supporting. Example: 'api', 'web', 'worker'"
+  description = <<-EOT
+    Optional service that these resources are supporting. Example: `"api"`,
+    `"web"`, `"worker"`. Used in resource names to differentiate from other
+    services.
+    EOT
   default     = ""
 }
 
 variable "service_short" {
   type        = string
-  description = "Short name for the service. Used in resource names with character limits. Defaults to service."
+  description = <<-EOT
+    Short name for the service. Used in resource names with character limits.
+    Defaults to the same value as `service`.
+    EOT
   default     = ""
 }
 
 variable "skip_final_snapshot" {
   type        = bool
-  description = "Whether to skip the final snapshot when destroying the database cluster."
+  description = <<-EOT
+    Whether to skip the final snapshot when destroying the database cluster.
+    EOT
   default     = false
 }
 
 variable "snapshot_identifier" {
   type        = string
-  description = "Optional name or ARN of the snapshot to restore the cluster from. Only applicable on create."
+  description = <<-EOT
+    Optional name or ARN of the snapshot to restore the cluster from. Only
+    applicable on create.
+    EOT
   default     = ""
 }
 

@@ -1,0 +1,8 @@
+Version: "2012-10-17"
+Statement:
+  - Sid: AllowRDSConnect
+    Effect: Allow
+    Action:
+      - rds-db:connect
+    Resource:
+      - "aws:${partition}:rds-db:${region}:${account}:dbuser:${cluster_id}:${username}"
