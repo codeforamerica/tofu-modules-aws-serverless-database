@@ -1,0 +1,30 @@
+name: ShellCheck
+
+on:
+  push:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  shellcheck:
+    name: Lint bash scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+      - name: ShellCheck SARIF Analysis
+        uses: reactive-firewall/shellcheck-scan@v1
+        with:
+          match: templates/*.sh.tftpl
+          shell-format: bash
+      - name: Upload SARIF to GitHub Advanced Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: shellcheck.sarif
+          category: shellcheck
