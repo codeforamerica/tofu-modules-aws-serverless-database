@@ -23,7 +23,7 @@ resource "null_resource" "iam_db_user" {
     username    = each.key
     cluster_arn = module.database.cluster_arn
     secret_arn  = module.database.cluster_master_user_secret[0].secret_arn
-    region      = data.aws_region.current.name
+    region      = data.aws_region.current.region
     engine      = var.engine
     databases   = join(",", each.value.databases)
     privileges  = each.value.privileges
@@ -34,7 +34,7 @@ resource "null_resource" "iam_db_user" {
       username      = each.key
       cluster_arn   = module.database.cluster_arn
       secret_arn    = module.database.cluster_master_user_secret[0].secret_arn
-      region        = data.aws_region.current.name
+      region        = data.aws_region.current.region
       engine        = var.engine
       databases_csv = join(",", each.value.databases)
       privileges    = each.value.privileges
