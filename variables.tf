@@ -181,12 +181,27 @@ variable "iam_db_users" {
   validation {
     condition = alltrue([
       for username, _ in var.iam_db_users :
-      can(regex("^[a-zA-Z_][a-zA-Z0-9_]{0,62}$", username))
+      can(regex("^[a-zA-Z_][a-zA-Z0-9_-]{0,62}$", username))
     ])
     error_message = <<-EOT
         IAM user names must start with a letter or underscore and contain only
-        letters, digits, or underscores (max 63 characters).
+        letters, digits, hyphens, or underscores, and be 1 to 63 characters in
+        length.
       EOT
+  }
+
+  validation {
+    condition = alltrue([
+      for _, user in var.iam_db_users :
+      alltrue([
+        for db in try(user.databases, []) :
+        can(regex("^[a-zA-Z0-9_-]{1,63}$", db))
+      ])
+    ])
+    error_message = <<-EOT
+      All IAM user database names must contain only letters, digits, hyphens, or
+      underscores, and be 1 to 63 characters in length.
+    EOT
   }
 
   validation {
