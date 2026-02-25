@@ -39,6 +39,7 @@ jobs:
         uses: reactive-firewall/shellcheck-scan@v1.2
         with:
           path: ${{ steps.preprocess.outputs.script_files }}
+          publish-artifacts: false
           shell-format: bash
       # The SARIF report will include the paths to the preprocessed scripts,
       # which are not useful for the user. We postprocess the SARIF file to

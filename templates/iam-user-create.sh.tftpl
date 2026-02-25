@@ -146,7 +146,15 @@ elif [ "$ENGINE" = "postgresql" ]; then
 
     # Make sure the user doesn't have access to any other databases.
     for DB in $dblist; do
-      if [[ ! " $${DBS[@]} " =~ " $${DB} " ]]; then
+      in_dbs=false
+      for dbname in "$${DBS[@]}"; do
+        if [[ "$dbname" == "$${DB}" ]]; then
+          in_dbs=true
+          break
+        fi
+      done
+
+      if ! $in_dbs; then
         echo "Revoking $USERNAME privileges from database $DB..."
         run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
         run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
