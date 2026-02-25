@@ -20,9 +20,14 @@ jobs:
       # OpenTofu templates use variable interpolation and special escape
       # sequences that ShellCheck doesn't understand. We preprocess the
       # templates to produce proper shell scripts to be scanned.
+      #
+      # Additionally, the ShellCheck action fails if there is no
+      # requirements.txt file in the repository.
+      # See: https://github.com/reactive-firewall/shellcheck-scan/issues/16
       - name: Preprocess templates for ShellCheck
         id: preprocess
         run: |
+          touch requirements.txt
           mkdir -p scripts
           for f in templates/*.sh.tftpl; do
             out="scripts/$(basename "${f}" .tftpl)"
@@ -67,8 +72,14 @@ jobs:
             ' shellcheck.sarif > shellcheck.sarif.tmp \
               && mv shellcheck.sarif.tmp shellcheck.sarif
           fi
-      - name: Upload SARIF to GitHub Advanced Security
-        if: always()
+      - name: Parse SARIF file for annotations
+        if: always() && hashFiles('shellcheck.sarif') != ''
+        uses: jontyms/sarif-annotations@v0.0.3
+        with:
+          annotation-level: notice
+          sarif-file: shellcheck.sarif
+      - name: Upload SARIF result
+        if: always() && hashFiles('shellcheck.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: shellcheck.sarif
