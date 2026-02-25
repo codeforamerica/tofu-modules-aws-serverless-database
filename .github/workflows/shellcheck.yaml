@@ -17,11 +17,55 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v6
+      # OpenTofu templates use variable interpolation and special escape
+      # sequences that ShellCheck doesn't understand. We preprocess the
+      # templates to produce proper shell scripts to be scanned.
+      - name: Preprocess templates for ShellCheck
+        id: preprocess
+        run: |
+          mkdir -p scripts
+          for f in templates/*.sh.tftpl; do
+            out="scripts/$(basename "${f}" .tftpl)"
+            sed -e 's/\$\${/${/g' -e 's/\${\([a-z][a-z0-9_]*\)}//g' "$f" > "$out"
+            echo "Preprocessed template: $f -> $out"
+          done
+          ls -la scripts
+          # Output space-separated list for the ShellCheck action. The action's
+          # match input uses git ls-files (tracked files only), so we use path
+          # instead since these files are generated and untracked.
+          list=(scripts/*.sh)
+          printf 'script_files=%s\n' "${list[*]}" >> "$GITHUB_OUTPUT"
       - name: ShellCheck SARIF Analysis
-        uses: reactive-firewall/shellcheck-scan@v1
+        uses: reactive-firewall/shellcheck-scan@v1.2
         with:
-          match: templates/*.sh.tftpl
+          path: ${{ steps.preprocess.outputs.script_files }}
           shell-format: bash
+      # The SARIF report will include the paths to the preprocessed scripts,
+      # which are not useful for the user. We postprocess the SARIF file to
+      # replace the paths with the paths to the original templates.
+      - name: Postprocess SARIF for template paths
+        if: always() && hashFiles('shellcheck.sarif') != ''
+        shell: bash
+        run: |
+          if [ -f shellcheck.sarif ]; then
+            jq '
+              walk(
+                if type == "object" and has("uri")
+                then .uri |= (
+                  if type == "string" and test("scripts/.*\\.sh")
+                  then (
+                    capture("scripts/(?<name>[^/]+)\\.sh") as $c |
+                    "templates/\($c.name).sh.tftpl"
+                  )
+                  else .
+                  end
+                )
+                else .
+                end
+              )
+            ' shellcheck.sarif > shellcheck.sarif.tmp \
+              && mv shellcheck.sarif.tmp shellcheck.sarif
+          fi
       - name: Upload SARIF to GitHub Advanced Security
         if: always()
         uses: github/codeql-action/upload-sarif@v4
