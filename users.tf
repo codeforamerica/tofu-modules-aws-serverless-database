@@ -50,7 +50,6 @@ resource "null_resource" "iam_db_user" {
       secret_arn    = self.triggers.secret_arn
       region        = self.triggers.region
       engine        = self.triggers.engine
-      databases_csv = self.triggers.databases
     })
     interpreter = ["bash", "-c"]
   }
