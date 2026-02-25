@@ -112,7 +112,7 @@ variable "engine" {
 
   validation {
     condition     = contains(["mysql", "postgresql"], var.engine)
-    error_message = "Valid enginers are \"mysql\" and \"postgresql\"."
+    error_message = "Valid engines are \"mysql\" and \"postgresql\"."
   }
 }
 
@@ -167,6 +167,14 @@ variable "iam_db_users" {
     condition = var.enable_data_api || length(var.iam_db_users) == 0
     error_message = <<-EOT
       IAM database users cannot be created unless enable_data_api is true.
+      EOT
+  }
+
+
+  validation {
+    condition = var.iam_authentication || length(var.iam_db_users) == 0
+    error_message = <<-EOT
+      IAM authentication must be enabled to create IAM database users.
       EOT
   }
 

@@ -14,7 +14,7 @@ to match your desired configuration. For example:
 
 ```hcl
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.4.0"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.7.0"
 
   project     = "my-project"
   environment = "dev"
@@ -108,7 +108,7 @@ vault in the current region.
 
 ```hcl
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.4.0"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.7.0"
 
   project     = "my-project"
   environment = "dev"
@@ -216,7 +216,7 @@ cluster_parameters = [
 
 You can optionally create database users to be used for [IAM based
 authentication][iam-auth]. This allows your application(s) to connect to the
-database withtout managing a static password that needs to be rotated regularly.
+database without managing a static password that needs to be rotated regularly.
 
 > [!NOTE]
 > To avoid needing to connect directly to the database, these users are managed
@@ -228,7 +228,7 @@ Provide a map of users, the keys of which will become the username. For example:
 
 ```hcl
 enable_data_api = true
-iam_users       = {
+iam_db_users    = {
   "myapp" = {
     privileges = "all"
   },
@@ -239,7 +239,7 @@ iam_users       = {
 }
 ```
 
-To grant your resources the privledges to connect to the database as the user,
+To grant your resources the privileges to connect to the database as the user,
 an IAM policy is created for each user, and mapped to the username in the
 `iam_db_user_policy_arns` output. You can attach this policy to one or more IAM
 roles which are attached to your resources.
@@ -251,7 +251,7 @@ roles which are attached to your resources.
 | Name       | Description                                                                                   | Type           | Default | Required |
 | ---------- | --------------------------------------------------------------------------------------------- | -------------- | ------- | -------- |
 | databases  | List of databases to grant the user access to. Leave empty to grant access to all databases.  | `list(string)` | `[]`    | No       |
-| privileges | Privledges to grant on the databases for the user. Valid values are `"all"` and `"readonly"`. | `string`       | `"all"` | No       |
+| privileges | Privileges to grant on the databases for the user. Valid values are `"all"` and `"readonly"`. | `string`       | `"all"` | No       |
 
 ### security_group_rules
 
@@ -321,11 +321,11 @@ security_group_rules = {
 [aws-backup]: https://docs.aws.amazon.com/aws-backup/latest/devguide/whatisbackup.html
 [aws_fargate_service]: https://github.com/codeforamerica/tofu-modules-aws-fargate-service
 [backup_schedules]: #backup_schedules
-[badge-checks]: <https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml/badge.svg>
-[badge-release]: <https://img.shields.io/github/v/release/codeforamerica/tofu-modules-aws-serverless-database?logo=github&label=Latest%20Release>
-[code-checks]: <https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml>
+[badge-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml/badge.svg
+[badge-release]: https://img.shields.io/github/v/release/codeforamerica/tofu-modules-aws-serverless-database?logo=github&label=Latest%20Release
+[code-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml
 [cluster_parameters]: #cluster_parameters
-[data-api]: <https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html>
-[iam-auth]: <https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html>
-[latest-release]: <https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest>
+[data-api]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html
+[iam-auth]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html
+[latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
 [security_group_rules]: #security_group_rules
