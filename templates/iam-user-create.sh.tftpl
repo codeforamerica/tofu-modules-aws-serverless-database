@@ -32,6 +32,7 @@ export AWS_PAGER=""
 #   Optionally, whether to output the response, defaults to false.
 # Outputs:
 #   SQL error message if the statement fails.
+#   Optionally, the JSON response from the AWS CLI.
 # Returns:
 #   0 if the statement succeeds, 1 otherwise.
 #######################################
@@ -58,7 +59,9 @@ run_sql() {
     return 1
   fi
 
-  # On success, print the JSON output only if output_response is true
+  # On success, print the JSON output only if output_response is true. This
+  # allows callers to capture the output if needed, but we don't want to print
+  # it by default.
   if [ "$output_response" = true ]; then
     echo "$output"
   fi
