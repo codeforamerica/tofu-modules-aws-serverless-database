@@ -1,0 +1,86 @@
+name: ShellCheck
+
+on:
+  push:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  shellcheck:
+    name: Lint bash scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+      # OpenTofu templates use variable interpolation and special escape
+      # sequences that ShellCheck doesn't understand. We preprocess the
+      # templates to produce proper shell scripts to be scanned.
+      #
+      # Additionally, the ShellCheck action fails if there is no
+      # requirements.txt file in the repository.
+      # See: https://github.com/reactive-firewall/shellcheck-scan/issues/16
+      - name: Preprocess templates for ShellCheck
+        id: preprocess
+        run: |
+          touch requirements.txt
+          mkdir -p scripts
+          for f in templates/*.sh.tftpl; do
+            out="scripts/$(basename "${f}" .tftpl)"
+            sed -e 's/\$\${/${/g' -e 's/\${\([a-z][a-z0-9_]*\)}//g' "$f" > "$out"
+            echo "Preprocessed template: $f -> $out"
+          done
+          ls -la scripts
+          # Output space-separated list for the ShellCheck action. The action's
+          # match input uses git ls-files (tracked files only), so we use path
+          # instead since these files are generated and untracked.
+          list=(scripts/*.sh)
+          printf 'script_files=%s\n' "${list[*]}" >> "$GITHUB_OUTPUT"
+      - name: ShellCheck SARIF Analysis
+        uses: reactive-firewall/shellcheck-scan@v1.2
+        with:
+          path: ${{ steps.preprocess.outputs.script_files }}
+          publish-artifacts: false
+          shell-format: bash
+      # The SARIF report will include the paths to the preprocessed scripts,
+      # which are not useful for the user. We postprocess the SARIF file to
+      # replace the paths with the paths to the original templates.
+      - name: Postprocess SARIF for template paths
+        if: always() && hashFiles('shellcheck.sarif') != ''
+        shell: bash
+        run: |
+          if [ -f shellcheck.sarif ]; then
+            jq '
+              walk(
+                if type == "object" and has("uri")
+                then .uri |= (
+                  if type == "string" and test("scripts/.*\\.sh")
+                  then (
+                    capture("scripts/(?<name>[^/]+)\\.sh") as $c |
+                    "templates/\($c.name).sh.tftpl"
+                  )
+                  else .
+                  end
+                )
+                else .
+                end
+              )
+            ' shellcheck.sarif > shellcheck.sarif.tmp \
+              && mv shellcheck.sarif.tmp shellcheck.sarif
+          fi
+      - name: Parse SARIF file for annotations
+        if: always() && hashFiles('shellcheck.sarif') != ''
+        uses: jontyms/sarif-annotations@v0.0.3
+        with:
+          annotation-level: notice
+          sarif-file: shellcheck.sarif
+      - name: Upload SARIF result
+        if: always() && hashFiles('shellcheck.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: shellcheck.sarif
+          category: shellcheck

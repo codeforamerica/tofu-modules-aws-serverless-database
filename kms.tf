@@ -5,7 +5,7 @@ resource "aws_kms_key" "database" {
   policy = jsonencode(yamldecode(templatefile("${path.module}/templates/key-policy.yaml.tftpl", {
     account_id : data.aws_caller_identity.identity.account_id,
     partition : data.aws_partition.current.partition,
-    region : data.aws_region.current.name,
+    region : data.aws_region.current.region,
   })))
 
   tags = var.tags
@@ -26,7 +26,7 @@ resource "aws_kms_key" "backups" {
   policy = jsonencode(yamldecode(templatefile("${path.module}/templates/backup-key-policy.yaml.tftpl", {
     account_id : data.aws_caller_identity.identity.account_id,
     partition : data.aws_partition.current.partition,
-    region : data.aws_region.current.name,
+    region : data.aws_region.current.region,
   })))
 
   tags = var.tags
