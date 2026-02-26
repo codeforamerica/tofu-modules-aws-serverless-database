@@ -20,14 +20,10 @@ jobs:
       # OpenTofu templates use variable interpolation and special escape
       # sequences that ShellCheck doesn't understand. We preprocess the
       # templates to produce proper shell scripts to be scanned.
-      #
-      # Additionally, the ShellCheck action fails if there is no
-      # requirements.txt file in the repository.
-      # See: https://github.com/reactive-firewall/shellcheck-scan/issues/16
+
       - name: Preprocess templates for ShellCheck
         id: preprocess
         run: |
-          touch requirements.txt
           mkdir -p scripts
           for f in templates/*.sh.tftpl; do
             out="scripts/$(basename "${f}" .tftpl)"
@@ -41,7 +37,8 @@ jobs:
           list=(scripts/*.sh)
           printf 'script_files=%s\n' "${list[*]}" >> "$GITHUB_OUTPUT"
       - name: ShellCheck SARIF Analysis
-        uses: reactive-firewall/shellcheck-scan@v1.2
+        # TODO: Switch to the final release once it's available.
+        uses: reactive-firewall/shellcheck-scan@v2.0-rc2
         with:
           path: ${{ steps.preprocess.outputs.script_files }}
           publish-artifacts: false
