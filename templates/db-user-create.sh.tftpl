@@ -105,6 +105,15 @@ elif [ "$ENGINE" = "postgresql" ]; then
   run_sql "postgres" \
     "DO \$\$BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$USERNAME') THEN CREATE USER \"$USERNAME\" WITH PASSWORD '$PASSWORD'; ELSE ALTER USER \"$USERNAME\" WITH PASSWORD '$PASSWORD'; END IF; END\$\$;"
 
+  # Get a list of all existing databases.
+  dblist=$(
+    run_sql "postgres" \
+      "SELECT datname FROM pg_database WHERE datistemplate = false AND datallowconn = true;" \
+      true |
+      jq -r '.records[][].stringValue' |
+      grep -v '^rdsadmin$'
+  )
+
   IFS=',' read -ra DBS <<< "$DATABASES_CSV"
   for DB in "$${DBS[@]}"; do
     echo "Granting $USERNAME SELECT privileges on database $DB..."
@@ -114,6 +123,27 @@ elif [ "$ENGINE" = "postgresql" ]; then
     run_sql "$DB" "GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO \"$USERNAME\";"
     run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO \"$USERNAME\";"
     run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO \"$USERNAME\";"
+  done
+
+  # Make sure the user doesn't have access to any other databases.
+  for DB in $dblist; do
+    in_dbs=false
+    for dbname in "$${DBS[@]}"; do
+      if [[ "$dbname" == "$${DB}" ]]; then
+        in_dbs=true
+        break
+      fi
+    done
+
+    if ! $in_dbs; then
+      echo "Revoking $USERNAME privileges from database $DB..."
+      run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM \"$USERNAME\";"
+      run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL PRIVILEGES ON TABLES FROM \"$USERNAME\";"
+      run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL PRIVILEGES ON SEQUENCES FROM \"$USERNAME\";"
+    fi
   done
 
   # Ensure the user cannot create databases.

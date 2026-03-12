@@ -69,8 +69,15 @@ ephemeral "aws_secretsmanager_random_password" "db_user" {
 resource "aws_secretsmanager_secret" "db_user" {
   for_each = var.db_users
 
-  name       = "${local.prefix}/db-users/${each.key}"
   kms_key_id = var.secrets_key_arn
+  name = join("/", compact([
+    var.project,
+    var.environment,
+    var.service,
+    "database",
+    "user",
+    each.key,
+  ]))
 
   tags = var.tags
 }
