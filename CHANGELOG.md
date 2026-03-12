@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.8.0 (2026-03-12)
+
+### Feat
+
+- Support creation of readonly database users. (WRSAT-447) (#35)
+
 ## 1.7.0 (2026-02-25)
 
 ### Feat
