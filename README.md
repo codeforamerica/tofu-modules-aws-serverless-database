@@ -250,10 +250,10 @@ database(s). The user will be assigned a randomly generated password, and their
 credentials will be stored in AWS Secrets Manager. The ARN of the secret for
 each user is available in the `db_user_secret_arns` output.
 
-| Name       | Description                                                                                                   | Type           | Default      | Required |
-| ---------- | ------------------------------------------------------------------------------------------------------------- | -------------- | ------------ | -------- |
-| databases  | List of databases to grant the user access to. If left empty, the user will not have access to any databases. | `list(string)` | `[]`         | no       |
-| privileges | Privileges to grant on the databases for the user. The only valid value is `"readonly"`.                      | `string`       | `"readonly"` | no       |
+| Name       | Description                                                                              | Type           | Default      | Required |
+| ---------- | ---------------------------------------------------------------------------------------- | -------------- | ------------ | -------- |
+| databases  | List of databases to grant the user access to.                                           | `list(string)` | n/a          | yes      |
+| privileges | Privileges to grant on the databases for the user. The only valid value is `"readonly"`. | `string`       | `"readonly"` | no       |
 
 ### iam_db_users
 

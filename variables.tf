@@ -144,9 +144,9 @@ variable "db_users" {
   validation {
     condition = alltrue([
       for _, user in var.db_users :
-      contains(["all", "readonly"], user.privileges)
+      user.privileges == "readonly"
     ])
-    error_message = "Database user privileges must be \"all\" or \"readonly\"."
+    error_message = "Database user privileges must be \"readonly\"; only read-only access is supported for db_users."
   }
 }
 
