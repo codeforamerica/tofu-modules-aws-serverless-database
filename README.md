@@ -80,6 +80,7 @@ specifying short names for your project and (optionally) service using the
 | [backup_schedules]                | Backup schedules to create for the database cluster.                                                                                                                                                                                               | `list(object)` | `list(object)` | no       |
 | [cluster_parameters]              | Parameters to be set on the database cluster.                                                                                                                                                                                                      | `list(object)` | `[]`           | no       |
 | configure_aws_backup              | Whether to configure AWS Backup with the defined backup schedules.                                                                                                                                                                                 | `bool`         | `false`        | no       |
+| [db_users]                        | Map of database users to create on the cluster. The map key becomes the database username. Requires `enable_data_api = true` and the AWS CLI must be installed on the OpenTofu runner.                                                             | `map(object)`  | `{}`           | no       |
 | enable_data_api                   | Whether to enable the [Data API][data-api] for the database cluster.                                                                                                                                                                               | `bool`         | `false`        | no       |
 | engine                            | Database engine to use for the cluster. Valid values are `"mysql"` and `"postgresql"`.                                                                                                                                                             | `string`       | `"postgresql"` | no       |
 | engine_version                    | Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime.                                                                                                                | `string`       | `null`         | no       |
@@ -212,6 +213,48 @@ cluster_parameters = [
 | value        | Value to set the parameter to.                                      | `string` | n/a           | yes      |
 | apply_method | How to apply the parameter. Can be `immediate` or `pending-reboot`. | `string` | `"immediate"` | no       |
 
+### db_users
+
+> [!WARNING]
+> Creation of standard database users is limited to read-only users. We highly
+> recommend using [`iam_db_users`][iam_db_users] instead for enhanced security.
+> If you must rely on a user with a password, ensure that password is kept
+> secure and rotated regularly.
+>
+> The same dependency on the RDS Data API exists for `db_users` as
+> `iam_db_users`
+
+Although discourage, it is occasionally necessary to create a read-only database
+user with a password. This options gives you the ability to create read-only
+database users with access to _specific databases_.
+
+Provide a map of users, the keys of which will become the username. For example:
+
+> [!CAUTION]
+> Database usernames should be treated as sensitive values and should not be
+> committed directly to your repository.
+>
+> Usernames are presented as strings here for demonstration purposes only.
+
+```hcl
+enable_data_api = true
+db_users    = {
+  "myreadonlyuser" = {
+    databases = ["my_stats"]
+  }
+}
+```
+
+This will create a new database user with `SELECT` access to the specified
+database(s). The user will be assigned a randomly generated password, and their
+credentials will be stored in AWS Secrets Manager. The ARN of the secret for
+each user is available in the `db_user_secret_arns` output.
+
+| Name       | Description                                                                                                   | Type           | Default      | Required |
+| ---------- | ------------------------------------------------------------------------------------------------------------- | -------------- | ------------ | -------- |
+| databases  | List of databases to grant the user access to. If left empty, the user will not have access to any databases. | `list(string)` | `[]`         | no       |
+| privileges | Privileges to grant on the databases for the user. The only valid value is `"readonly"`.                      | `string`       | `"readonly"` | no       |
+
 ### iam_db_users
 
 You can optionally create database users to be used for [IAM based
@@ -225,6 +268,12 @@ database without managing a static password that needs to be rotated regularly.
 > installed.
 
 Provide a map of users, the keys of which will become the username. For example:
+
+> [!CAUTION]
+> Database usernames should be treated as sensitive values and should not be
+> committed directly to your repository.
+>
+> Usernames are presented as strings here for demonstration purposes only.
 
 ```hcl
 enable_data_api = true
@@ -250,8 +299,8 @@ roles which are attached to your resources.
 
 | Name       | Description                                                                                   | Type           | Default | Required |
 | ---------- | --------------------------------------------------------------------------------------------- | -------------- | ------- | -------- |
-| databases  | List of databases to grant the user access to. Leave empty to grant access to all databases.  | `list(string)` | `[]`    | No       |
-| privileges | Privileges to grant on the databases for the user. Valid values are `"all"` and `"readonly"`. | `string`       | `"all"` | No       |
+| databases  | List of databases to grant the user access to. Leave empty to grant access to all databases.  | `list(string)` | `[]`    | no       |
+| privileges | Privileges to grant on the databases for the user. Valid values are `"all"` and `"readonly"`. | `string`       | `"all"` | no       |
 
 ### security_group_rules
 
@@ -313,6 +362,7 @@ security_group_rules = {
 | cluster_endpoint         | DNS endpoint to connect to the database cluster.                                                          | `string`      |
 | cluster_id               | ID of the RDS database cluster.                                                                           | `string`      |
 | cluster_resource_id      | Resource ID of the RDS database cluster.                                                                  | `string`      |
+| db_user_secret_arns      | Map of database username to the ARN of the Secrets Manager secret containing their credentials.           | `map(string)` |
 | iam_db_user_policy_arns  | Map of IAM database username to the ARN of the IAM policy granting `rds-db:connect` access for that user. | `map(string)` |
 | secret_arn               | ARN of the secret holding database credentials.                                                           | `string`      |
 
@@ -326,6 +376,7 @@ security_group_rules = {
 [code-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml
 [cluster_parameters]: #cluster_parameters
 [data-api]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html
+[db_users]: #db_users
 [iam-auth]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html
 [latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
 [security_group_rules]: #security_group_rules
