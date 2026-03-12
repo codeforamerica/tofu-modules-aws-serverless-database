@@ -224,8 +224,8 @@ cluster_parameters = [
 > The same dependency on the RDS Data API exists for `db_users` as
 > `iam_db_users`
 
-Although discourage, it is occasionally necessary to create a read-only database
-user with a password. This options gives you the ability to create read-only
+Although discouraged, it is occasionally necessary to create a read-only database
+user with a password. This option gives you the ability to create read-only
 database users with access to _specific databases_.
 
 Provide a map of users, the keys of which will become the username. For example:

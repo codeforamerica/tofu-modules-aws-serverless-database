@@ -54,8 +54,7 @@ run_sql() {
       --sql           "$sql" \
       --output        json 2>&1
   ); then
-    echo "Error running SQL against database \"$database\":"
-    echo "$sql"
+    echo "Error running SQL against database \"$database\": (statement redacted; may contain sensitive information)"
     echo "AWS CLI output:"
     echo "$output"
     return 1
@@ -86,6 +85,11 @@ for attempt in $(seq 1 18); do
   sleep 10
 done
 
+if [ "$DATA_API_READY" != true ]; then
+  echo "Error: Data API not reachable after 18 attempts (3 minutes). Aborting." >&2
+  exit 1
+fi
+
 # AWS Aurora supports both MySQL and PostgreSQL engines, which each have their
 # own syntax for user and privilege management.
 if [ "$ENGINE" = "mysql" ]; then
@@ -96,6 +100,30 @@ if [ "$ENGINE" = "mysql" ]; then
   IFS=',' read -ra DBS <<< "$DATABASES_CSV"
   for DB in "$${DBS[@]}"; do
     run_sql "mysql" "GRANT SELECT ON \`$DB\`.* TO '$USERNAME'@'%';"
+  done
+
+  # Get a list of all user databases (excluding MySQL system schemas).
+  dblist=$(
+    run_sql "mysql" \
+      "SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys');" \
+      true |
+      jq -r '.records[][].stringValue' || true
+  )
+
+  # Make sure the user doesn't have access to any other databases.
+  for DB in $dblist; do
+    in_dbs=false
+    for dbname in "$${DBS[@]}"; do
+      if [[ "$dbname" == "$${DB}" ]]; then
+        in_dbs=true
+        break
+      fi
+    done
+
+    if ! $in_dbs; then
+      echo "Revoking $USERNAME privileges from database $DB..."
+      run_sql "mysql" "REVOKE SELECT ON \`$DB\`.* FROM '$USERNAME'@'%';"
+    fi
   done
 
   # Flush privileges to ensure they take effect immediately.
@@ -111,7 +139,7 @@ elif [ "$ENGINE" = "postgresql" ]; then
       "SELECT datname FROM pg_database WHERE datistemplate = false AND datallowconn = true;" \
       true |
       jq -r '.records[][].stringValue' |
-      grep -v '^rdsadmin$'
+      grep -v '^rdsadmin$' || true
   )
 
   IFS=',' read -ra DBS <<< "$DATABASES_CSV"
