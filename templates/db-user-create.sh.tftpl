@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# This script uses the AWS RDS Data API to create and manage password-based
+# database users on an Aurora cluster. Unlike IAM users, these users authenticate
+# with a username/password stored in AWS Secrets Manager.
+#
+# The password is read from Secrets Manager at runtime, so external rotations
+# are picked up automatically on the next apply.
+#
+# Note: This script is generated from a template and meant to be run by
+# OpenTofu's local-exec provisioner. It is not intended to be used directly.
+set -euo pipefail
+
+# Set variables from template inputs.
+CLUSTER_ARN="${cluster_arn}"
+ENGINE="${engine}"
+DATABASES_CSV="${databases_csv}"
+REGION="${region}"
+SECRET_ARN="${secret_arn}"
+USERNAME="${username}"
+USER_SECRET_ARN="${user_secret_arn}"
+
+# Disable the AWS pager.
+export AWS_PAGER=""
+
+#######################################
+# Run a SQL statement against the database using the RDS Data API.
+#
+# Globals:
+#   CLUSTER_ARN
+#   REGION
+#   SECRET_ARN
+# Arguments:
+#   Database to run the statement against, and the SQL statement to execute.
+#   Optionally, whether to output the response, defaults to false.
+# Outputs:
+#   SQL error message if the statement fails.
+#   Optionally, the JSON response from the AWS CLI.
+# Returns:
+#   0 if the statement succeeds, 1 otherwise.
+#######################################
+run_sql() {
+  local database="$1"
+  local sql="$2"
+  local output_response="$${3:-false}"
+
+  # Capture output and error
+  local output
+  if ! output=$(
+    aws rds-data execute-statement \
+      --region        "$REGION" \
+      --resource-arn  "$CLUSTER_ARN" \
+      --secret-arn    "$SECRET_ARN" \
+      --database      "$database" \
+      --sql           "$sql" \
+      --output        json 2>&1
+  ); then
+    echo "Error running SQL against database \"$database\":"
+    echo "$sql"
+    echo "AWS CLI output:"
+    echo "$output"
+    return 1
+  fi
+
+  # On success, print the JSON output only if output_response is true. This
+  # allows callers to capture the output if needed, but we don't want to print
+  # it by default.
+  if [ "$output_response" = true ]; then
+    echo "$output"
+  fi
+}
+
+# Fetch the current password from Secrets Manager.
+PASSWORD=$(
+  aws secretsmanager get-secret-value \
+    --region    "$REGION" \
+    --secret-id "$USER_SECRET_ARN" \
+    --output    json \
+  | jq -r '.SecretString | fromjson | .password'
+)
+
+# Wait for the Data API to become reachable (up to 3 minutes).
+PING_DB="$( [ "$ENGINE" = "mysql" ] && echo "mysql" || echo "postgres" )"
+for attempt in $(seq 1 18); do
+  run_sql "$PING_DB" "SELECT 1" > /dev/null 2>&1 && break
+  echo "Data API not yet available, retrying in 10s (attempt $attempt/18)..."
+  sleep 10
+done
+
+# AWS Aurora supports both MySQL and PostgreSQL engines, which each have their
+# own syntax for user and privilege management.
+if [ "$ENGINE" = "mysql" ]; then
+  # Create the user if it doesn't exist, then set/update the password.
+  run_sql "mysql" "CREATE USER IF NOT EXISTS '$USERNAME'@'%' IDENTIFIED BY '$PASSWORD';"
+  run_sql "mysql" "ALTER USER '$USERNAME'@'%' IDENTIFIED BY '$PASSWORD';"
+
+  IFS=',' read -ra DBS <<< "$DATABASES_CSV"
+  for DB in "$${DBS[@]}"; do
+    run_sql "mysql" "GRANT SELECT ON \`$DB\`.* TO '$USERNAME'@'%';"
+  done
+
+  # Flush privileges to ensure they take effect immediately.
+  run_sql "mysql" "FLUSH PRIVILEGES;"
+elif [ "$ENGINE" = "postgresql" ]; then
+  # Create the user if it doesn't exist, then set/update the password.
+  run_sql "postgres" \
+    "DO \$\$BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$USERNAME') THEN CREATE USER \"$USERNAME\" WITH PASSWORD '$PASSWORD'; ELSE ALTER USER \"$USERNAME\" WITH PASSWORD '$PASSWORD'; END IF; END\$\$;"
+
+  IFS=',' read -ra DBS <<< "$DATABASES_CSV"
+  for DB in "$${DBS[@]}"; do
+    echo "Granting $USERNAME SELECT privileges on database $DB..."
+    run_sql "$DB" "GRANT CONNECT ON DATABASE \"$DB\" TO \"$USERNAME\";"
+    run_sql "$DB" "GRANT USAGE ON SCHEMA public TO \"$USERNAME\";"
+    run_sql "$DB" "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"$USERNAME\";"
+    run_sql "$DB" "GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO \"$USERNAME\";"
+    run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO \"$USERNAME\";"
+    run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO \"$USERNAME\";"
+  done
+
+  # Ensure the user cannot create databases.
+  run_sql "postgres" "ALTER USER \"$USERNAME\" WITH NOCREATEDB;"
+fi
