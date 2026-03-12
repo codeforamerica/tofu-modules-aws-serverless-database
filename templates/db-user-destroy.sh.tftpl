@@ -78,7 +78,7 @@ elif [ "$ENGINE" = "postgresql" ]; then
       "SELECT datname FROM pg_database WHERE datistemplate = false AND datallowconn = true;" \
       true |
       jq -r '.records[][].stringValue' |
-      grep -v '^rdsadmin$'
+      grep -v '^rdsadmin$' || true
   )
 
   # Just to be safe, revoke privileges from all databases.
