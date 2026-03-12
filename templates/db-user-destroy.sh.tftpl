@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# This script uses the AWS RDS Data API to delete password-based database
+# users created on an Aurora cluster.
+#
+# Note: This script is generated from a template and meant to be run by
+# OpenTofu's local-exec provisioner. It is not intended to be used directly.
+set -euo pipefail
+
+# Set variables from template inputs.
+CLUSTER_ARN="${cluster_arn}"
+ENGINE="${engine}"
+REGION="${region}"
+SECRET_ARN="${secret_arn}"
+USERNAME="${username}"
+
+# Disable the AWS pager.
+export AWS_PAGER=""
+
+#######################################
+# Run a SQL statement against the database using the RDS Data API. If the
+# statement fails, we log a warning and continue as the database cluster
+# may already be deleted.
+#
+# Globals:
+#   CLUSTER_ARN
+#   REGION
+#   SECRET_ARN
+# Arguments:
+#   Database to run the statement against, and the SQL statement to execute.
+#   Optionally, whether to output the response, defaults to false.
+# Outputs:
+#   SQL error message if the statement fails.
+#   Optionally, the JSON response from the AWS CLI.
+# Returns:
+#   0 in all cases (failures are logged but we do not exit).
+#######################################
+run_sql() {
+  local database="$1"
+  local sql="$2"
+  local output_response="$${3:-false}"
+
+  # Capture output and error
+  local output
+  if ! output=$(
+    aws rds-data execute-statement \
+      --region        "$REGION" \
+      --resource-arn  "$CLUSTER_ARN" \
+      --secret-arn    "$SECRET_ARN" \
+      --database      "$database" \
+      --sql           "$sql" \
+      --output        json 2>&1
+  ); then
+    echo "Error running SQL against database \"$database\":"
+    echo "$sql"
+    echo "AWS CLI output:"
+    echo "$output"
+    echo "Warning: SQL failed (cluster may already be gone), continuing."
+    return 0
+  fi
+
+  # On success, print the JSON output only if output_response is true. This
+  # allows callers to capture the output if needed, but we don't want to print
+  # it by default.
+  if [ "$output_response" = true ]; then
+    echo "$output"
+  fi
+}
+
+# AWS Aurora supports both MySQL and PostgreSQL engines, which each have their
+# own syntax for user management.
+if [ "$ENGINE" = "mysql" ]; then
+  run_sql "mysql" "DROP USER IF EXISTS '$USERNAME'@'%';"
+  run_sql "mysql" "FLUSH PRIVILEGES;"
+elif [ "$ENGINE" = "postgresql" ]; then
+  # Get a list of all existing databases.
+  dblist=$(
+    run_sql "postgres" \
+      "SELECT datname FROM pg_database WHERE datistemplate = false AND datallowconn = true;" \
+      true |
+      jq -r '.records[][].stringValue' |
+      grep -v '^rdsadmin$' || true
+  )
+
+  # Just to be safe, revoke privileges from all databases.
+  for DB in $dblist; do
+    echo "Revoking $USERNAME privileges from database $DB..."
+    run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
+    run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
+    run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"
+    run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM \"$USERNAME\";"
+    run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL PRIVILEGES ON TABLES FROM \"$USERNAME\";"
+    run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL PRIVILEGES ON SEQUENCES FROM \"$USERNAME\";"
+  done
+
+  run_sql "postgres" "DROP USER IF EXISTS \"$USERNAME\";"
+fi

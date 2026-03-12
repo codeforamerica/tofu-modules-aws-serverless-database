@@ -28,6 +28,14 @@ output "cluster_resource_id" {
   value       = module.database.cluster_resource_id
 }
 
+output "db_user_secret_arns" {
+  description = <<-EOT
+    Map of database username to the ARN of the Secrets Manager secret
+    containing their credentials.
+    EOT
+  value       = { for username, secret in aws_secretsmanager_secret.db_user : username => secret.arn }
+}
+
 output "iam_db_user_policy_arns" {
   description = <<-EOT
       Map of IAM database username to the ARN of the IAM policy granting

@@ -96,6 +96,60 @@ variable "configure_aws_backup" {
   default     = false
 }
 
+variable "db_users" {
+  type = map(object({
+    databases  = list(string)
+    privileges = optional(string, "readonly")
+  }))
+  description = <<-EOT
+    Map of database users to create on the cluster. The map key becomes the
+    database username. Requires `enable_data_api = true` and the AWS CLI must
+    be installed on the OpenTofu runner.
+    EOT
+  default     = {}
+
+  validation {
+    condition     = var.enable_data_api || length(var.db_users) == 0
+    error_message = <<-EOT
+      Database users cannot be created unless enable_data_api is true.
+      EOT
+  }
+
+  validation {
+    condition = alltrue([
+      for username, _ in var.db_users :
+      can(regex("^[a-zA-Z_][a-zA-Z0-9_-]{2,62}$", username))
+    ])
+    error_message = <<-EOT
+      Database user names must start with a letter or underscore and contain
+      only letters, digits, hyphens, or underscores, and be 3 to 63 characters
+      in length.
+      EOT
+  }
+
+  validation {
+    condition = alltrue([
+      for _, user in var.db_users :
+      alltrue([
+        for db in try(user.databases, []) :
+        can(regex("^[a-zA-Z0-9_-]{1,63}$", db))
+      ])
+    ])
+    error_message = <<-EOT
+      All database user database names must contain only letters, digits,
+      hyphens, or underscores, and be 1 to 63 characters in length.
+      EOT
+  }
+
+  validation {
+    condition = alltrue([
+      for _, user in var.db_users :
+      user.privileges == "readonly"
+    ])
+    error_message = "Database user privileges must be \"readonly\"; only read-only access is supported for db_users."
+  }
+}
+
 variable "enable_data_api" {
   type        = bool
   description = "Whether to enable the Data API for the database cluster."
@@ -164,7 +218,7 @@ variable "iam_db_users" {
   default     = {}
 
   validation {
-    condition = var.enable_data_api || length(var.iam_db_users) == 0
+    condition     = var.enable_data_api || length(var.iam_db_users) == 0
     error_message = <<-EOT
       IAM database users cannot be created unless enable_data_api is true.
       EOT
@@ -172,7 +226,7 @@ variable "iam_db_users" {
 
 
   validation {
-    condition = var.iam_authentication || length(var.iam_db_users) == 0
+    condition     = var.iam_authentication || length(var.iam_db_users) == 0
     error_message = <<-EOT
       IAM authentication must be enabled to create IAM database users.
       EOT
@@ -210,6 +264,15 @@ variable "iam_db_users" {
       contains(["all", "readonly"], user.privileges)
     ])
     error_message = "IAM user privileges must be \"all\" or \"readonly\"."
+  }
+
+  validation {
+    condition = alltrue([
+      for username in keys(var.iam_db_users) : !contains(keys(var.db_users), username)
+    ])
+    error_message = <<-EOT
+      All database users across iam_db_users and db_users must be unique.
+      EOT
   }
 }
 
