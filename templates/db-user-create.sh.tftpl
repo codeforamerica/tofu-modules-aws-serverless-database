@@ -78,9 +78,14 @@ PASSWORD=$(
 )
 
 # Wait for the Data API to become reachable (up to 3 minutes).
+DATA_API_READY=false
 PING_DB="$( [ "$ENGINE" = "mysql" ] && echo "mysql" || echo "postgres" )"
 for attempt in $(seq 1 18); do
-  run_sql "$PING_DB" "SELECT 1" > /dev/null 2>&1 && break
+  if run_sql "$PING_DB" "SELECT 1" > /dev/null 2>&1; then
+    DATA_API_READY=true
+    break
+  fi
+
   echo "Data API not yet available, retrying in 10s (attempt $attempt/18)..."
   sleep 10
 done
