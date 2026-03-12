@@ -8,6 +8,9 @@ and this project adheres to
 
 ## 1.8.0 (2026-03-12)
 
+> [!WARNING]
+> This release bumps the minimum required version of OpenTofu/Terraform to `1.11`.
+
 ### Feat
 
 - Support creation of readonly database users. (WRSAT-447) (#35)
