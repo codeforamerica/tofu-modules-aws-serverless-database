@@ -7,6 +7,91 @@ variable "apply_immediately" {
   default     = false
 }
 
+variable "apps" {
+  type = map(object({
+    extra_databases = optional(list(string), [])
+    services = map(object({
+      privileges = optional(string, "all")
+    }))
+  }))
+  description = <<-EOT
+    Map of applications to provision on the cluster, keyed by the app's
+    full, unsanitized name (e.g. "my-application"). Each app gets one
+    primary database plus any `extra_databases`, and one IAM database role
+    per declared service, named "<primary database>_<service key>". Requires
+    `enable_data_api = true` and `iam_authentication = true`, same as
+    `iam_db_users`.
+
+    Database and role names are derived and collision-checked by this
+    module: do not pre-sanitize the app name, `extra_databases` entries, or
+    service keys yourself — sanitization is lowercasing and replacing `-`
+    with `_`. A colliding derived database or username fails the plan with a
+    clear error instead of silently overwriting an existing one.
+
+    This is independent of `iam_db_users`/`db_users` — those variables and
+    their existing behavior are unaffected by `apps`, aside from sharing the
+    same underlying role-creation scripts.
+    EOT
+  default     = {}
+
+  validation {
+    condition     = var.enable_data_api || length(var.apps) == 0
+    error_message = "Apps cannot be provisioned unless enable_data_api is true."
+  }
+
+  validation {
+    condition     = var.iam_authentication || length(var.apps) == 0
+    error_message = "IAM authentication must be enabled to provision apps."
+  }
+
+  validation {
+    condition = alltrue([
+      for app, _ in var.apps :
+      can(regex("^[a-zA-Z][a-zA-Z0-9-]{0,62}$", app))
+    ])
+    error_message = <<-EOT
+      App names (the apps map keys) must start with a letter and contain
+      only letters, digits, or hyphens, and be 1 to 63 characters in length.
+      EOT
+  }
+
+  validation {
+    condition = alltrue([
+      for _, cfg in var.apps : alltrue([
+        for extra in cfg.extra_databases :
+        can(regex("^[a-zA-Z0-9-]{1,63}$", extra))
+      ])
+    ])
+    error_message = <<-EOT
+      extra_databases entries must contain only letters, digits, or hyphens,
+      and be 1 to 63 characters in length.
+      EOT
+  }
+
+  validation {
+    condition = alltrue([
+      for _, cfg in var.apps : alltrue([
+        for service, _ in cfg.services :
+        can(regex("^[a-zA-Z_][a-zA-Z0-9_-]{0,62}$", service))
+      ])
+    ])
+    error_message = <<-EOT
+      Service names (apps.*.services map keys) must start with a letter or
+      underscore and contain only letters, digits, hyphens, or underscores,
+      and be 1 to 63 characters in length.
+      EOT
+  }
+
+  validation {
+    condition = alltrue([
+      for _, cfg in var.apps : alltrue([
+        for _, svc in cfg.services : contains(["all", "readonly"], svc.privileges)
+      ])
+    ])
+    error_message = "Service privileges must be \"all\" or \"readonly\"."
+  }
+}
+
 variable "automatic_backup_retention_period" {
   type        = number
   description = "Number of days to retain automatic backups, between 1 and 35."
