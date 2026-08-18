@@ -45,12 +45,6 @@ locals {
     if length(sources) > 1
   }
 
-  # Tolerant (last-wins) — safe because the precondition below blocks the
-  # apply before a real collision could ever reach real infrastructure.
-  apps_database_owners = merge([
-    for p in local.apps_primary_and_extra_pairs : { (p.db) = p.app }
-  ]...)
-
   # Every database a given app owns, keyed by app — reused by
   # apps_service_entries below so the list of an app's databases only gets
   # derived once, not recomputed per service.
