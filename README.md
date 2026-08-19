@@ -73,6 +73,7 @@ specifying short names for your project and (optionally) service using the
 | subnets                           | List of subnet ids the database instances may be placed in.                                                                                                                                                                                        | `list(string)` | n/a            | yes      |
 | vpc_id                            | Id of the VPC to launch the database cluster into.                                                                                                                                                                                                 | `string`       | n/a            | yes      |
 | apply_immediately                 | Whether to apply changes immediately rather than during the next maintenance window. WARNING: This may result in a restart of the cluster!                                                                                                         | `bool`         | `false`        | no       |
+| [apps]                            | Map of applications to provision on the cluster, keyed by the app's full, unsanitized name. Derives database and IAM role names for you. Requires `enable_data_api = true` and `iam_authentication = true`.                                        | `map(object)`  | `{}`           | no       |
 | automatic_backup_retention_period | Number of days to retain automatic backups, between 1 and 35.                                                                                                                                                                                      | `number`       | `31`           | no       |
 | backup_namespace                  | Namespace for backups, prefixed to vault names to produce globally unique names.                                                                                                                                                                   | `string`       | `cfa`          | no       |
 | backup_replica_region             | Region to use for cross-region backup replication. If not specified, no replica will be created. If specified, the module will create a backup vault in the specified region and configure the backup schedules to replicate to the replica vault. | `string`       | `null`         | no       |
@@ -100,6 +101,71 @@ specifying short names for your project and (optionally) service using the
 | skip_final_snapshot               | Whether to skip the final snapshot when destroying the database cluster.                                                                                                                                                                           | `bool`         | `false`        | no       |
 | snapshot_identifier               | Optional name or ARN of the snapshot to restore the cluster from. Only applicable on create.                                                                                                                                                       | `bool`         | `false`        | no       |
 | tags                              | Optional tags to be applied to all resources.                                                                                                                                                                                                      | `map(string)`  | `{}`           | no       |
+
+### apps
+
+You can provision applications directly, without pre-computing database or
+role names yourself. This is the recommended way to onboard applications onto
+a shared cluster: provide the app's full, unsanitized name, its
+`extra_databases` (if any), and its services, and the module derives and
+collision-checks everything for you.
+
+> [!NOTE]
+> Like `iam_db_users`, this requires `enable_data_api = true` and
+> `iam_authentication = true`, and shares the same underlying scripts —
+> `apps` and `iam_db_users` entries end up in the same
+> `iam_db_user_policy_arns` output, keyed by the derived (or literal, for
+> `iam_db_users`) username.
+
+The database name is derived from the app's key: lowercased, with `-`
+replaced by `_` (`my-application` becomes `my_application`). Each entry in
+`extra_databases` gets the same treatment, suffixed onto the primary name
+(`queue` becomes `my_application_queue`). Each service gets its own role,
+named `<database>_<service>`.
+
+Every service always gets its app's primary database. An `extra_databases`
+entry only reaches a service if that service lists it in its own
+`extra_databases` — declaring it at the app level makes the database exist,
+declaring it again per service is what actually grants access. Two services
+in the same app can end up with completely different databases; nothing
+grants a service access to a sibling service's database by default.
+
+```hcl
+enable_data_api = true
+apps = {
+  "my-application" = {
+    extra_databases = ["queue", "reports"]
+    services = {
+      "web" = {
+        privileges = "all"
+      },
+      "worker" = {
+        privileges      = "all"
+        extra_databases = ["queue"]
+      },
+      "report-runner" = {
+        privileges      = "readonly"
+        extra_databases = ["reports"]
+      }
+    }
+  }
+}
+```
+
+The above creates databases `my_application`, `my_application_queue`, and
+`my_application_reports`. `web` only gets `my_application`; `worker` gets
+`my_application` and `my_application_queue`, but not `my_application_reports`;
+`report-runner` gets `my_application` and `my_application_reports`, but not
+`my_application_queue`.
+
+> [!IMPORTANT]
+> Derived database and role names are checked for collisions across every
+> entry in `apps` (not just within one app — two entries in the same app can
+> collide too) and the plan fails with a clear error if two would derive the
+> same name — rename the conflicting app or `extra_databases` entry instead
+> of picking a different name for the role. Collisions with `iam_db_users`
+> and `db_users` usernames are also caught, and a service listing an
+> `extra_databases` entry its app never declared fails the plan too.
 
 ### backup_schedules
 
@@ -192,6 +258,19 @@ database engine to determine which parameters can be applied immediately.
 > [!NOTE]
 > If a parameter requires a restart, you _must_ set the `apply_method` to
 > `"pending-reboot"`.
+
+> [!NOTE]
+> The `apply_method` above only controls how a parameter *value* is applied
+> once the cluster is already on a custom parameter group. It doesn't cover
+> the first time `cluster_parameters` goes from unset to set on an
+> already-existing cluster — that flips `create_db_cluster_parameter_group`
+> from `false` to `true` and switches the cluster off AWS's default
+> parameter group, which AWS always treats as `pending-reboot` regardless of
+> `apply_method` or the parameter's own dynamism. A manual
+> `aws rds failover-db-cluster` (or instance reboot, for a single-instance
+> cluster) is required to clear it. Clusters created with `cluster_parameters`
+> already set from the start don't hit this, since the custom group is
+> attached at creation.
 
 ```hcl
 cluster_parameters = [
@@ -369,6 +448,7 @@ security_group_rules = {
 [acus]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html#aurora-serverless-v2.how-it-works.capacity
 [aurora-serverless]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html
 [aws-backup]: https://docs.aws.amazon.com/aws-backup/latest/devguide/whatisbackup.html
+[apps]: #apps
 [aws_fargate_service]: https://github.com/codeforamerica/tofu-modules-aws-fargate-service
 [backup_schedules]: #backup_schedules
 [badge-checks]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/actions/workflows/main.yaml/badge.svg

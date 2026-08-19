@@ -1,5 +1,5 @@
 resource "aws_iam_policy" "iam_db_user" {
-  for_each = var.iam_db_users
+  for_each = local.combined_iam_db_users
 
   name        = join("-", [local.prefix, "db", each.key])
   description = "Allows IAM authentication to the ${local.prefix} Aurora cluster as \"${each.key}\"."
@@ -16,7 +16,7 @@ resource "aws_iam_policy" "iam_db_user" {
 }
 
 resource "null_resource" "iam_db_user" {
-  for_each   = var.iam_db_users
+  for_each   = local.combined_iam_db_users
   depends_on = [module.database]
 
   triggers = {
