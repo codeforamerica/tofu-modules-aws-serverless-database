@@ -1,21 +1,28 @@
-# Derives database names and IAM usernames for the `apps` variable, then
-# merges the result with `iam_db_users` before it reaches users.tf's
-# for_each. `iam_db_users` itself is never modified — its entries pass
-# through unchanged. `db_users` is never modified either — it's only read
+# Derives database names and IAM usernames for the `apps` variable and
+# merges the result with `iam_db_users` before users.tf's for_each.
+# `iam_db_users`/`db_users` are never modified — the latter is only read
 # here to fold its usernames into the collision check.
 #
-# Sanitization is lowercasing and replacing `-` with `_`. This is the only
-# place that happens; callers must pass raw, unsanitized names.
+# Sanitization (lowercase, `-` -> `_`) happens only here; callers pass raw
+# names.
 locals {
   apps_database_name = {
     for app, _ in var.apps : app => lower(replace(app, "-", "_"))
   }
 
-  # Every derived database name (primary + extra_databases), each paired
-  # with a human-readable source, flattened across all apps. Flattening
-  # (instead of grouping by app) is what lets us catch two extra_databases
-  # entries in the *same* app that sanitize to the same name (e.g. "Reports"
-  # and "reports"), not just collisions between different apps.
+  # Keyed by the raw extra_databases name, so collision detection and
+  # per-service scoping below both look names up here instead of
+  # re-deriving them.
+  apps_extra_database_names = {
+    for app, cfg in var.apps : app => {
+      for extra in cfg.extra_databases :
+      extra => "${local.apps_database_name[app]}_${lower(replace(extra, "-", "_"))}"
+    }
+  }
+
+  # Flattened (not grouped by app) so two extra_databases entries in the
+  # *same* app that sanitize to the same name (e.g. "Reports"/"reports")
+  # are caught too, not just collisions across different apps.
   apps_primary_and_extra_pairs = flatten([
     for app, cfg in var.apps : concat(
       [{
@@ -24,8 +31,8 @@ locals {
         source = "app \"${app}\" primary database"
       }],
       [
-        for extra in cfg.extra_databases : {
-          db     = "${local.apps_database_name[app]}_${lower(replace(extra, "-", "_"))}"
+        for extra, db in local.apps_extra_database_names[app] : {
+          db     = db
           app    = app
           source = "app \"${app}\" extra_databases entry \"${extra}\""
         }
@@ -45,19 +52,34 @@ locals {
     if length(sources) > 1
   }
 
-  # Every database a given app owns, keyed by app — reused by
-  # apps_service_entries below so the list of an app's databases only gets
-  # derived once, not recomputed per service.
-  apps_databases_by_app = {
-    for app, _ in var.apps :
-    app => [for p in local.apps_primary_and_extra_pairs : p.db if p.app == app]
-  }
+  # Also blocked by the variable validation above, but that's not
+  # guaranteed to run before the lookup below, which would otherwise crash
+  # on a bad reference — so it's filtered defensively there and reported
+  # as a precondition here instead.
+  apps_undeclared_service_extra_databases = flatten([
+    for app, cfg in var.apps : [
+      for service, svc in cfg.services : [
+        for extra in svc.extra_databases :
+        "app \"${app}\" service \"${service}\" extra_databases entry \"${extra}\""
+        if !contains(cfg.extra_databases, extra)
+      ]
+    ]
+  ])
 
+  # Each service gets the primary database plus only its own declared
+  # extra_databases — never a sibling service's databases by default.
   apps_service_entries = flatten([
     for app, cfg in var.apps : [
       for service, svc in cfg.services : {
-        username   = "${local.apps_database_name[app]}_${lower(replace(service, "-", "_"))}"
-        databases  = local.apps_databases_by_app[app]
+        username = "${local.apps_database_name[app]}_${lower(replace(service, "-", "_"))}"
+        databases = concat(
+          [local.apps_database_name[app]],
+          [
+            for extra in svc.extra_databases :
+            local.apps_extra_database_names[app][extra]
+            if contains(cfg.extra_databases, extra)
+          ]
+        )
         privileges = svc.privileges
         source     = "app \"${app}\" service \"${service}\""
       }
@@ -73,11 +95,9 @@ locals {
     }
   ]
 
-  # Legacy iam_db_users entries plus apps-derived entries — this is what
-  # users.tf's iam_db_user resources actually loop over. db_users is
-  # deliberately left out: it has its own separate (password-based)
-  # resources in users.tf that this must not touch. It's still included in
-  # the username collision check below, just not in this map.
+  # What users.tf's iam_db_user resources loop over. db_users stays out of
+  # this (it has its own separate password-based resources) but is still
+  # checked for username collisions below.
   combined_iam_db_user_entries = concat(local.legacy_iam_db_user_entries, local.apps_service_entries)
 
   combined_iam_db_users = merge([
@@ -89,9 +109,8 @@ locals {
     }
   ]...)
 
-  # db_users is a separate resource path, but it creates roles in the same
-  # Postgres username namespace as iam_db_users/apps, so a collision with it
-  # is just as real and worth catching here.
+  # db_users creates roles in the same Postgres username namespace, so a
+  # collision with it is just as real despite the separate resource path.
   db_users_username_sources = [
     for username, _ in var.db_users : {
       username = username
@@ -123,12 +142,15 @@ locals {
     for name, sources in local.username_collisions :
     "\"${name}\" claimed by ${join(" and ", sources)}"
   ])
+
+  apps_undeclared_service_extra_databases_message = join("; ", local.apps_undeclared_service_extra_databases)
 }
 
+# All three checks below only exist once `apps` is used, so a caller who
+# never touches it (every existing iam_db_users/db_users consumer today)
+# sees no new resources in their plan at all.
+
 resource "terraform_data" "apps_database_collision_check" {
-  # Only exists when `apps` is actually used, so a caller who never touches
-  # `apps` (every existing iam_db_users/db_users consumer today) sees no new
-  # resource in their plan at all — not even a harmless no-op create.
   count = length(var.apps) > 0 ? 1 : 0
 
   lifecycle {
@@ -140,15 +162,23 @@ resource "terraform_data" "apps_database_collision_check" {
 }
 
 resource "terraform_data" "apps_username_collision_check" {
-  # Same reasoning: only exists once there's an `apps` entry that could
-  # possibly collide with another `apps` entry, an `iam_db_users` key, or a
-  # `db_users` key.
   count = length(var.apps) > 0 ? 1 : 0
 
   lifecycle {
     precondition {
       condition     = length(local.username_collisions) == 0
       error_message = "Colliding IAM database username(s): ${local.username_collision_message}."
+    }
+  }
+}
+
+resource "terraform_data" "apps_service_extra_databases_check" {
+  count = length(var.apps) > 0 ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = length(local.apps_undeclared_service_extra_databases) == 0
+      error_message = "Service extra_databases not declared by their app: ${local.apps_undeclared_service_extra_databases_message}. Add the entry to the app's own extra_databases first."
     }
   }
 }

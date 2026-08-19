@@ -123,26 +123,40 @@ replaced by `_` (`my-application` becomes `my_application`). Each entry in
 (`queue` becomes `my_application_queue`). Each service gets its own role,
 named `<database>_<service>`.
 
+Every service always gets its app's primary database. An `extra_databases`
+entry only reaches a service if that service lists it in its own
+`extra_databases` — declaring it at the app level makes the database exist,
+declaring it again per service is what actually grants access. Two services
+in the same app can end up with completely different databases; nothing
+grants a service access to a sibling service's database by default.
+
 ```hcl
 enable_data_api = true
 apps = {
   "my-application" = {
-    extra_databases = ["queue"]
+    extra_databases = ["queue", "reports"]
     services = {
       "web" = {
         privileges = "all"
       },
       "worker" = {
-        privileges = "all"
+        privileges      = "all"
+        extra_databases = ["queue"]
+      },
+      "report-runner" = {
+        privileges      = "readonly"
+        extra_databases = ["reports"]
       }
     }
   }
 }
 ```
 
-The above creates databases `my_application` and `my_application_queue`, and
-roles `my_application_web` and `my_application_worker`, each with access to
-both databases.
+The above creates databases `my_application`, `my_application_queue`, and
+`my_application_reports`. `web` only gets `my_application`; `worker` gets
+`my_application` and `my_application_queue`, but not `my_application_reports`;
+`report-runner` gets `my_application` and `my_application_reports`, but not
+`my_application_queue`.
 
 > [!IMPORTANT]
 > Derived database and role names are checked for collisions across every
@@ -150,7 +164,8 @@ both databases.
 > collide too) and the plan fails with a clear error if two would derive the
 > same name — rename the conflicting app or `extra_databases` entry instead
 > of picking a different name for the role. Collisions with `iam_db_users`
-> and `db_users` usernames are also caught.
+> and `db_users` usernames are also caught, and a service listing an
+> `extra_databases` entry its app never declared fails the plan too.
 
 ### backup_schedules
 
