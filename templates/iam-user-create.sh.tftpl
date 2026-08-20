@@ -150,6 +150,16 @@ elif [ "$ENGINE" = "postgresql" ]; then
           echo "Reassigning database $DB ownership from $current_owner to $USERNAME..."
           run_sql "postgres" "ALTER DATABASE \"$DB\" OWNER TO \"$USERNAME\";"
         fi
+      else
+        # Not the designated owner — either always shared, or a service
+        # was added and this db no longer has a single owner. A prior
+        # owner must be reclaimed, since shared databases must not leave
+        # an elevated owner behind.
+        current_owner=$(run_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = '$DB';" true | jq -r '.records[0][0].stringValue')
+        if [ "$current_owner" != "root" ]; then
+          echo "Reclaiming database $DB ownership from $current_owner to root (no longer single-owned)..."
+          run_sql "postgres" "ALTER DATABASE \"$DB\" OWNER TO root;"
+        fi
       fi
     done
   fi
