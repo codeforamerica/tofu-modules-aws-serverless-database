@@ -86,6 +86,37 @@ locals {
     ]
   ])
 
+  # Distinguishes apps-sourced roles from legacy iam_db_users/db_users roles
+  # after the merge below.
+  apps_service_usernames = toset([for e in local.apps_service_entries : e.username])
+
+  # A database gets an OWNER only when exactly one service uses it. Shared
+  # databases have no owner (deferred product decision — see README) and get
+  # a schema-level CREATE grant instead (iam-user-create.sh.tftpl).
+  apps_database_owner_username = merge([
+    for app, cfg in var.apps : merge(
+      length(cfg.services) == 1 ? {
+        (local.apps_database_name[app]) = "${local.apps_database_name[app]}_${lower(replace(keys(cfg.services)[0], "-", "_"))}"
+      } : {},
+      {
+        for extra, db in local.apps_extra_database_names[app] :
+        db => "${local.apps_database_name[app]}_${lower(replace(
+          [for service, svc in cfg.services : service if contains(svc.extra_databases, extra)][0]
+        , "-", "_"))}"
+        if length([for service, svc in cfg.services : service if contains(svc.extra_databases, extra)]) == 1
+      }
+    )
+  ]...)
+
+  # Subset of each apps-sourced role's databases it owns. lookup(), not
+  # direct indexing — a shared/unused database has no entry above.
+  apps_service_owned_databases = {
+    for e in local.apps_service_entries : e.username => [
+      for db in e.databases : db
+      if lookup(local.apps_database_owner_username, db, "") == e.username
+    ]
+  }
+
   legacy_iam_db_user_entries = [
     for username, cfg in var.iam_db_users : {
       username   = username
