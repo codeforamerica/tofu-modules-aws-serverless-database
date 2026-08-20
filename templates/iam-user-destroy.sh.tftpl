@@ -12,6 +12,8 @@ ENGINE="${engine}"
 REGION="${region}"
 SECRET_ARN="${secret_arn}"
 USERNAME="${username}"
+MANAGE_DATABASES="${manage_databases}"
+OWNED_DATABASES_CSV="${owned_databases_csv}"
 
 #######################################
 # Run a SQL statement against the database using the RDS Data API. If the
@@ -87,6 +89,16 @@ elif [ "$ENGINE" = "postgresql" ]; then
   # For PostgreSQL, we need to revoke privileges before dropping the user.
   # Otherwise, it may fail if the user is still attached to any databases.
   run_sql "postgres" "REVOKE rds_iam FROM \"$USERNAME\";"
+
+  # DROP USER fails if the role still owns a database, so reassign ownership
+  # back to root first.
+  if [ "$MANAGE_DATABASES" = "true" ] && [ -n "$OWNED_DATABASES_CSV" ]; then
+    IFS=',' read -ra OWNED_DBS <<< "$OWNED_DATABASES_CSV"
+    for DB in "$${OWNED_DBS[@]}"; do
+      echo "Reassigning ownership of $DB from $USERNAME to root..."
+      run_sql "postgres" "ALTER DATABASE \"$DB\" OWNER TO root;"
+    done
+  fi
 
   # Get a list of all existing databases.
   dblist=$(

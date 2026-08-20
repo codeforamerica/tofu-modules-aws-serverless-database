@@ -55,11 +55,13 @@ resource "null_resource" "iam_db_user" {
   provisioner "local-exec" {
     when = destroy
     command = templatefile("${path.module}/templates/iam-user-destroy.sh.tftpl", {
-      username    = self.triggers.username
-      cluster_arn = self.triggers.cluster_arn
-      secret_arn  = self.triggers.secret_arn
-      region      = self.triggers.region
-      engine      = self.triggers.engine
+      username            = self.triggers.username
+      cluster_arn         = self.triggers.cluster_arn
+      secret_arn          = self.triggers.secret_arn
+      region              = self.triggers.region
+      engine              = self.triggers.engine
+      manage_databases    = lookup(self.triggers, "manage_databases", "false")
+      owned_databases_csv = lookup(self.triggers, "owned_databases_csv", "")
     })
     interpreter = ["bash", "-c"]
   }
