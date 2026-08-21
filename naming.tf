@@ -66,12 +66,21 @@ locals {
     ]
   ])
 
+  # Single source of truth for a service's username — apps_database_owner_username
+  # below looks usernames up here instead of re-deriving the string, so the
+  # two can't silently diverge if this rule ever changes.
+  apps_service_username = {
+    for app, cfg in var.apps : app => {
+      for service, _ in cfg.services : service => "${local.apps_database_name[app]}_${lower(replace(service, "-", "_"))}"
+    }
+  }
+
   # Each service gets the primary database plus only its own declared
   # extra_databases — never a sibling service's databases by default.
   apps_service_entries = flatten([
     for app, cfg in var.apps : [
       for service, svc in cfg.services : {
-        username = "${local.apps_database_name[app]}_${lower(replace(service, "-", "_"))}"
+        username = local.apps_service_username[app][service]
         databases = concat(
           [local.apps_database_name[app]],
           [
@@ -91,18 +100,19 @@ locals {
   apps_service_usernames = toset([for e in local.apps_service_entries : e.username])
 
   # A database gets an OWNER only when exactly one service uses it. Shared
-  # databases have no owner (deferred product decision — see README) and get
-  # a schema-level CREATE grant instead (iam-user-create.sh.tftpl).
+  # databases are owned by the master user instead (deferred product
+  # decision on which service, if any, should own them — see README) and
+  # get a schema-level CREATE grant instead (iam-user-create.sh.tftpl).
   apps_database_owner_username = merge([
     for app, cfg in var.apps : merge(
       length(cfg.services) == 1 ? {
-        (local.apps_database_name[app]) = "${local.apps_database_name[app]}_${lower(replace(keys(cfg.services)[0], "-", "_"))}"
+        (local.apps_database_name[app]) = local.apps_service_username[app][keys(cfg.services)[0]]
       } : {},
       {
         for extra, db in local.apps_extra_database_names[app] :
-        db => "${local.apps_database_name[app]}_${lower(replace(
+        db => local.apps_service_username[app][
           [for service, svc in cfg.services : service if contains(svc.extra_databases, extra)][0]
-        , "-", "_"))}"
+        ]
         if length([for service, svc in cfg.services : service if contains(svc.extra_databases, extra)]) == 1
       }
     )
@@ -210,6 +220,21 @@ resource "terraform_data" "apps_service_extra_databases_check" {
     precondition {
       condition     = length(local.apps_undeclared_service_extra_databases) == 0
       error_message = "Service extra_databases not declared by their app: ${local.apps_undeclared_service_extra_databases_message}. Add the entry to the app's own extra_databases first."
+    }
+  }
+}
+
+# apps only creates databases and manages ownership on the postgresql
+# branch of iam-user-create.sh.tftpl/iam-user-destroy.sh.tftpl — on MySQL
+# it would create roles and grant on databases that were never created,
+# failing at runtime instead of here.
+resource "terraform_data" "apps_engine_check" {
+  count = length(var.apps) > 0 ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = var.engine == "postgresql"
+      error_message = "apps is only supported with engine = \"postgresql\"."
     }
   }
 }
