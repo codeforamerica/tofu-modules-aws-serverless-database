@@ -171,28 +171,33 @@ The above creates databases `my_application`, `my_application_queue`, and
 
 #### Database creation and ownership
 
-`apps` only supports `engine = "postgresql"` — using it with MySQL fails
-the plan with a clear error, rather than creating roles and grants against
-databases that were never created.
-
 Each app's databases are created automatically — you don't need to run
-`CREATE DATABASE` yourself. PG15+ revoked the `public` schema's default
-`CREATE` privilege, so a service needs either to own its database or an
-explicit grant to run migrations against it:
+`CREATE DATABASE` yourself. Every database is guaranteed at least one
+service using it: an app must declare at least one service, and every
+`extra_databases` entry must be claimed by at least one service's own
+`extra_databases` (both checked at plan time). `apps` only supports
+`engine = "postgresql"`; using it with MySQL fails the plan with a clear
+error instead of creating roles and grants against databases that were
+never created.
+
+PG15+ revoked the `public` schema's default `CREATE` privilege, so a
+service needs either to own its database or an explicit grant to run
+migrations against it:
 
 - A database used by exactly **one** service is owned by that service
   (`CREATE DATABASE ... OWNER`), which is what grants it `CREATE` implicitly.
-- A database used by **zero or multiple** services (e.g. an app's primary
-  database, shared by every service by default) is owned by the cluster's
-  master user instead of any service — no service gets elevated ownership.
-  Which service, if any, should own a shared database is an open product
-  question — this is deliberately left undecided until a real multi-service
-  use case exists to inform it, rather than picking an arbitrary tiebreaker
-  now. Every service using such a database instead gets an explicit
-  `GRANT CREATE ON SCHEMA public` — migrations still work today for every
-  service, this just isn't the final design. If a service is later added to
-  or removed from a database, ownership is reconciled automatically on the
-  next apply.
+- A database used by **multiple** services (e.g. an app's primary database,
+  shared by every service by default) is owned by the cluster's master user
+  instead, and each service gets an explicit `GRANT CREATE ON SCHEMA public`
+  rather than ownership.
+
+Which service, if any, should own a shared database is an open product
+question — deliberately left undecided until a real multi-service use case
+exists to inform it, rather than picking an arbitrary tiebreaker now. The
+master-user fallback above is what keeps migrations working for every
+service in the meantime, not the final design. If a service is later added
+to or removed from a database, ownership is reconciled automatically on the
+next apply.
 
 > [!NOTE]
 > An owning service can also `DROP` its own database — an accepted trade-off
@@ -378,6 +383,14 @@ each user is available in the `db_user_secret_arns` output.
 You can optionally create database users to be used for [IAM based
 authentication][iam-auth]. This allows your application(s) to connect to the
 database without managing a static password that needs to be rotated regularly.
+
+> [!WARNING]
+> Removing a `privileges = "all"` user reassigns any tables (or other
+> objects) it owns to the master user before dropping it. Previously, a
+> user that owned tables would silently fail to actually drop, leaving it
+> in place — this fixes that, but it means table ownership can now move on
+> a destroy with no plan-time signal, similar to the `apps` adoption
+> warning above.
 
 > [!NOTE]
 > To avoid needing to connect directly to the database, these users are managed
