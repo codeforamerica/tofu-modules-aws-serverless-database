@@ -107,13 +107,10 @@ elif [ "$ENGINE" = "postgresql" ]; then
     "DO \$\$BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$USERNAME') THEN CREATE USER \"$USERNAME\"; END IF; END\$\$;"
   run_sql "postgres" "GRANT rds_iam TO \"$USERNAME\";"
 
-  # Apps-sourced roles get their databases created automatically. Owned
-  # databases (OWNED_DATABASES_CSV) get CREATE back via ownership; shared
-  # ones get no OWNER here and an explicit grant below instead (see README).
-  # No CREATE DATABASE IF NOT EXISTS in Postgres, so existence is checked
-  # manually.
+  # Owned databases get CREATE via ownership; shared ones are owned by
+  # root and get an explicit grant below instead (see README).
   if [ "$MANAGE_DATABASES" = "true" ]; then
-    # Master must SET ROLE to the owner to CREATE DATABASE ... OWNER on PG16+.
+    # root needs role membership to set ownership (no SET ROLE involved).
     run_sql "postgres" "GRANT \"$USERNAME\" TO root;"
 
     IFS=',' read -ra OWNED_DBS <<< "$OWNED_DATABASES_CSV"
@@ -151,10 +148,8 @@ elif [ "$ENGINE" = "postgresql" ]; then
           run_sql "postgres" "ALTER DATABASE \"$DB\" OWNER TO \"$USERNAME\";"
         fi
       else
-        # Not the designated owner — either always shared, or a service
-        # was added and this db no longer has a single owner. A prior
-        # owner must be reclaimed, since shared databases must not leave
-        # an elevated owner behind.
+        # Not the designated owner — reclaim any prior owner, since
+        # shared databases must not leave one behind.
         current_owner=$(run_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = '$DB';" true | jq -r '.records[0][0].stringValue')
         if [ "$current_owner" != "root" ]; then
           echo "Reclaiming database $DB ownership from $current_owner to root (no longer single-owned)..."

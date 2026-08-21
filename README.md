@@ -169,6 +169,10 @@ The above creates databases `my_application`, `my_application_queue`, and
 
 #### Database creation and ownership
 
+`apps` only supports `engine = "postgresql"` — using it with MySQL fails
+the plan with a clear error, rather than creating roles and grants against
+databases that were never created.
+
 Each app's databases are created automatically — you don't need to run
 `CREATE DATABASE` yourself. PG15+ revoked the `public` schema's default
 `CREATE` privilege, so a service needs either to own its database or an
@@ -195,8 +199,8 @@ explicit grant to run migrations against it:
 > [!WARNING]
 > Moving an existing database (e.g. one currently under `iam_db_users`) into
 > `apps` reassigns its ownership on the next apply, with no plan-time signal
-> that this will happen. If the database ends up shared (zero or multiple
-> services), this requires the master user to already have (or be granted)
+> that this will happen — whether it ends up single-owned or shared. Either
+> way, this requires the master user to already have (or be granted)
 > membership in whatever role currently owns it — otherwise the apply fails
 > partway through.
 
