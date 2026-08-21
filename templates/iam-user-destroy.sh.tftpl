@@ -91,8 +91,12 @@ elif [ "$ENGINE" = "postgresql" ]; then
   run_sql "postgres" "REVOKE rds_iam FROM \"$USERNAME\";"
 
   # DROP USER fails if the role still owns a database, so reassign ownership
-  # back to root first.
+  # back to root first. root needs membership in the role to reassign away
+  # from it — re-grant here rather than relying on the create script's
+  # grant still being in place.
   if [ "$MANAGE_DATABASES" = "true" ] && [ -n "$OWNED_DATABASES_CSV" ]; then
+    run_sql "postgres" "GRANT \"$USERNAME\" TO root;"
+
     IFS=',' read -ra OWNED_DBS <<< "$OWNED_DATABASES_CSV"
     for DB in "$${OWNED_DBS[@]}"; do
       echo "Reassigning ownership of $DB from $USERNAME to root..."

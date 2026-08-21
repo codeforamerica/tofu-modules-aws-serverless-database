@@ -177,17 +177,28 @@ explicit grant to run migrations against it:
 - A database used by exactly **one** service is owned by that service
   (`CREATE DATABASE ... OWNER`), which is what grants it `CREATE` implicitly.
 - A database used by **zero or multiple** services (e.g. an app's primary
-  database, shared by every service by default) has no owner. Which service,
-  if any, should own a shared database is an open product question — this is
-  deliberately left undecided until a real multi-service use case exists to
-  inform it, rather than picking an arbitrary tiebreaker now. Every service
-  using such a database instead gets an explicit
+  database, shared by every service by default) is owned by the cluster's
+  master user instead of any service — no service gets elevated ownership.
+  Which service, if any, should own a shared database is an open product
+  question — this is deliberately left undecided until a real multi-service
+  use case exists to inform it, rather than picking an arbitrary tiebreaker
+  now. Every service using such a database instead gets an explicit
   `GRANT CREATE ON SCHEMA public` — migrations still work today for every
-  service, this just isn't the final design.
+  service, this just isn't the final design. If a service is later added to
+  or removed from a database, ownership is reconciled automatically on the
+  next apply.
 
 > [!NOTE]
 > An owning service can also `DROP` its own database — an accepted trade-off
 > for using ownership as the mechanism.
+
+> [!WARNING]
+> Moving an existing database (e.g. one currently under `iam_db_users`) into
+> `apps` reassigns its ownership on the next apply, with no plan-time signal
+> that this will happen. If the database ends up shared (zero or multiple
+> services), this requires the master user to already have (or be granted)
+> membership in whatever role currently owns it — otherwise the apply fails
+> partway through.
 
 ### backup_schedules
 
