@@ -87,6 +87,10 @@ if [ "$ENGINE" = "mysql" ]; then
   run_sql "mysql" "DROP USER IF EXISTS '$USERNAME'@'%';"
   run_sql "mysql" "FLUSH PRIVILEGES;"
 elif [ "$ENGINE" = "postgresql" ]; then
+  # root needs membership in the role to reassign anything away from it,
+  # in the per-database loop below.
+  run_sql "postgres" "GRANT \"$USERNAME\" TO root;"
+
   # Get a list of all existing databases.
   dblist=$(
     run_sql "postgres" \
@@ -99,6 +103,9 @@ elif [ "$ENGINE" = "postgresql" ]; then
   # Just to be safe, revoke privileges from all databases.
   for DB in $dblist; do
     echo "Revoking $USERNAME privileges from database $DB..."
+    # DROP USER also fails if the role owns any tables (e.g. from past
+    # migrations), not just a database — reassign those too.
+    run_sql "$DB" "REASSIGN OWNED BY \"$USERNAME\" TO root;"
     run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
     run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
     run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"

@@ -90,13 +90,12 @@ elif [ "$ENGINE" = "postgresql" ]; then
   # Otherwise, it may fail if the user is still attached to any databases.
   run_sql "postgres" "REVOKE rds_iam FROM \"$USERNAME\";"
 
-  # DROP USER fails if the role still owns a database, so reassign ownership
-  # back to root first. root needs membership in the role to reassign away
-  # from it — re-grant here rather than relying on the create script's
-  # grant still being in place.
-  if [ "$MANAGE_DATABASES" = "true" ] && [ -n "$OWNED_DATABASES_CSV" ]; then
-    run_sql "postgres" "GRANT \"$USERNAME\" TO root;"
+  # root needs membership in the role to reassign anything away from it,
+  # below and in the per-database loop.
+  run_sql "postgres" "GRANT \"$USERNAME\" TO root;"
 
+  # DROP USER fails if the role still owns a database, so reassign that first.
+  if [ "$MANAGE_DATABASES" = "true" ] && [ -n "$OWNED_DATABASES_CSV" ]; then
     IFS=',' read -ra OWNED_DBS <<< "$OWNED_DATABASES_CSV"
     for DB in "$${OWNED_DBS[@]}"; do
       echo "Reassigning ownership of $DB from $USERNAME to root..."
@@ -116,6 +115,9 @@ elif [ "$ENGINE" = "postgresql" ]; then
   # Just to be safe, revoke privileges from all databases.
   for DB in $dblist; do
     echo "Revoking $USERNAME privileges from database $DB..."
+    # DROP USER also fails if the role owns any tables (e.g. from past
+    # migrations), not just a database — reassign those too.
+    run_sql "$DB" "REASSIGN OWNED BY \"$USERNAME\" TO root;"
     run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
     run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
     run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"
