@@ -125,10 +125,12 @@ named `<database>_<service>`.
 
 Every service always gets its app's primary database. An `extra_databases`
 entry only reaches a service if that service lists it in its own
-`extra_databases` — declaring it at the app level makes the database exist,
-declaring it again per service is what actually grants access. Two services
-in the same app can end up with completely different databases; nothing
-grants a service access to a sibling service's database by default.
+`extra_databases`, and it's only ever created if at least one service
+does — an app must declare at least one service, and every `extra_databases`
+entry must be claimed by at least one service's own `extra_databases`, or
+the plan fails. Two services in the same app can end up with completely
+different databases; nothing grants a service access to a sibling
+service's database by default.
 
 ```hcl
 enable_data_api = true

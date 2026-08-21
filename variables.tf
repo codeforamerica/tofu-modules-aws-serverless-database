@@ -46,6 +46,11 @@ variable "apps" {
   }
 
   validation {
+    condition     = var.engine == "postgresql" || length(var.apps) == 0
+    error_message = "Apps is only supported with engine = \"postgresql\"."
+  }
+
+  validation {
     condition = alltrue([
       for app, _ in var.apps :
       can(regex("^[a-zA-Z][a-zA-Z0-9-]{0,62}$", app))
@@ -81,6 +86,25 @@ variable "apps" {
       Each service's extra_databases must already be declared in its app's
       own extra_databases — a service can't opt into a database its app
       never declared.
+      EOT
+  }
+
+  validation {
+    condition     = alltrue([for _, cfg in var.apps : length(cfg.services) > 0])
+    error_message = "Each app must declare at least one service, or its primary database is never created."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, cfg in var.apps : alltrue([
+        for extra in cfg.extra_databases :
+        length([for _, svc in cfg.services : svc if contains(svc.extra_databases, extra)]) > 0
+      ])
+    ])
+    error_message = <<-EOT
+      Every extra_databases entry must be claimed by at least one service's
+      own extra_databases, or that database is never created — either have
+      a service opt in, or remove the entry.
       EOT
   }
 

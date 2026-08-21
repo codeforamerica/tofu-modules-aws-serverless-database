@@ -223,18 +223,3 @@ resource "terraform_data" "apps_service_extra_databases_check" {
     }
   }
 }
-
-# apps only creates databases and manages ownership on the postgresql
-# branch of iam-user-create.sh.tftpl/iam-user-destroy.sh.tftpl — on MySQL
-# it would create roles and grant on databases that were never created,
-# failing at runtime instead of here.
-resource "terraform_data" "apps_engine_check" {
-  count = length(var.apps) > 0 ? 1 : 0
-
-  lifecycle {
-    precondition {
-      condition     = var.engine == "postgresql"
-      error_message = "apps is only supported with engine = \"postgresql\"."
-    }
-  }
-}
