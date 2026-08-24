@@ -116,7 +116,10 @@ elif [ "$ENGINE" = "postgresql" ]; then
   for DB in $dblist; do
     echo "Revoking $USERNAME privileges from database $DB..."
     # DROP USER also fails if the role owns any tables (e.g. from past
-    # migrations), not just a database — reassign those too.
+    # migrations), not just a database — reassign those too. No DROP OWNED
+    # after this: run_sql swallows failures, so if REASSIGN quietly failed,
+    # DROP OWNED would delete the role's tables instead of leaving them
+    # with a stuck role — a stuck role is the safer failure mode.
     run_sql "$DB" "REASSIGN OWNED BY \"$USERNAME\" TO root;"
     run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
     run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
