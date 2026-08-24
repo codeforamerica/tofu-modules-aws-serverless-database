@@ -167,7 +167,10 @@ The above creates databases `my_application`, `my_application_queue`, and
 > same name — rename the conflicting app or `extra_databases` entry instead
 > of picking a different name for the role. Collisions with `iam_db_users`
 > and `db_users` usernames are also caught, and a service listing an
-> `extra_databases` entry its app never declared fails the plan too.
+> `extra_databases` entry its app never declared fails the plan too. Postgres
+> silently truncates identifiers over 63 bytes, so two different, valid
+> app/service names that agree on their first 63 bytes are also caught —
+> shorten one of them if this fires.
 
 #### Database creation and ownership
 

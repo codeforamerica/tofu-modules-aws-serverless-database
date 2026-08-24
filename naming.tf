@@ -174,6 +174,18 @@ locals {
     if length(sources) > 1
   }
 
+  # Postgres truncates identifiers at 63 bytes -- two different usernames
+  # can still collide there even though username_collisions sees them as distinct.
+  truncated_username_groups = {
+    for truncated in distinct([for e in local.all_username_sources : substr(e.username, 0, 63)]) :
+    truncated => distinct([for e in local.all_username_sources : e.username if substr(e.username, 0, 63) == truncated])
+  }
+
+  truncated_username_collisions = {
+    for truncated, usernames in local.truncated_username_groups : truncated => usernames
+    if length(usernames) > 1
+  }
+
   apps_database_collision_message = join("; ", [
     for name, sources in local.apps_database_collisions :
     "\"${name}\" claimed by ${join(" and ", sources)}"
@@ -184,10 +196,15 @@ locals {
     "\"${name}\" claimed by ${join(" and ", sources)}"
   ])
 
+  truncated_username_collision_message = join("; ", [
+    for truncated, usernames in local.truncated_username_collisions :
+    "\"${truncated}\" claimed by ${join(" and ", usernames)}"
+  ])
+
   apps_undeclared_service_extra_databases_message = join("; ", local.apps_undeclared_service_extra_databases)
 }
 
-# All three checks below only exist once `apps` is used, so a caller who
+# All four checks below only exist once `apps` is used, so a caller who
 # never touches it (every existing iam_db_users/db_users consumer today)
 # sees no new resources in their plan at all.
 
@@ -220,6 +237,17 @@ resource "terraform_data" "apps_service_extra_databases_check" {
     precondition {
       condition     = length(local.apps_undeclared_service_extra_databases) == 0
       error_message = "Service extra_databases not declared by their app: ${local.apps_undeclared_service_extra_databases_message}. Add the entry to the app's own extra_databases first."
+    }
+  }
+}
+
+resource "terraform_data" "truncated_username_collision_check" {
+  count = length(var.apps) > 0 ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = length(local.truncated_username_collisions) == 0
+      error_message = "Username(s) collide once Postgres truncates them to 63 bytes: ${local.truncated_username_collision_message}. Shorten the app or service name so the derived username fits."
     }
   }
 }
