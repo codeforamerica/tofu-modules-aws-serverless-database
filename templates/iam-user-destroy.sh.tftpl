@@ -12,6 +12,8 @@ ENGINE="${engine}"
 REGION="${region}"
 SECRET_ARN="${secret_arn}"
 USERNAME="${username}"
+MANAGE_DATABASES="${manage_databases}"
+OWNED_DATABASES_CSV="${owned_databases_csv}"
 
 #######################################
 # Run a SQL statement against the database using the RDS Data API. If the
@@ -47,11 +49,11 @@ run_sql() {
       --sql           "$sql" \
       --output        json 2>&1
   ); then
-    echo "Error running SQL against database \"$database\":"
-    echo "$sql"
-    echo "AWS CLI output:"
-    echo "$output"
-    echo "Warning: SQL failed (cluster may already be gone), continuing."
+    echo "Error running SQL against database \"$database\":" >&2
+    echo "$sql" >&2
+    echo "AWS CLI output:" >&2
+    echo "$output" >&2
+    echo "Warning: SQL failed (cluster may already be gone), continuing." >&2
     return 0
   fi
 
@@ -63,6 +65,21 @@ run_sql() {
   fi
 }
 
+# Wait for the Data API to become reachable (up to 3 minutes). Doesn't use
+# run_sql, which always returns 0 here — this needs the real exit code.
+PING_DB="$( [ "$ENGINE" = "mysql" ] && echo "mysql" || echo "postgres" )"
+for attempt in $(seq 1 18); do
+  aws rds-data execute-statement \
+    --region       "$REGION" \
+    --resource-arn "$CLUSTER_ARN" \
+    --secret-arn   "$SECRET_ARN" \
+    --database     "$PING_DB" \
+    --sql          "SELECT 1" \
+    --output       json > /dev/null 2>&1 && break
+  echo "Data API not yet available, retrying in 10s (attempt $attempt/18)..."
+  sleep 10
+done
+
 # AWS Aurora supports both MySQL and PostgreSQL engines, which each have their
 # own syntax for user and privilege management.
 if [ "$ENGINE" = "mysql" ]; then
@@ -73,18 +90,37 @@ elif [ "$ENGINE" = "postgresql" ]; then
   # Otherwise, it may fail if the user is still attached to any databases.
   run_sql "postgres" "REVOKE rds_iam FROM \"$USERNAME\";"
 
+  # root needs membership in the role to reassign anything away from it,
+  # below and in the per-database loop.
+  run_sql "postgres" "GRANT \"$USERNAME\" TO root;"
+
+  # DROP USER fails if the role still owns a database, so reassign that first.
+  if [ "$MANAGE_DATABASES" = "true" ] && [ -n "$OWNED_DATABASES_CSV" ]; then
+    IFS=',' read -ra OWNED_DBS <<< "$OWNED_DATABASES_CSV"
+    for DB in "$${OWNED_DBS[@]}"; do
+      echo "Reassigning ownership of $DB from $USERNAME to root..."
+      run_sql "postgres" "ALTER DATABASE \"$DB\" OWNER TO root;"
+    done
+  fi
+
   # Get a list of all existing databases.
   dblist=$(
     run_sql "postgres" \
       "SELECT datname FROM pg_database WHERE datistemplate = false AND datallowconn = true;" \
       true |
       jq -r '.records[][].stringValue' |
-      grep -v '^rdsadmin$'
+      grep -v '^rdsadmin$' || true
   )
 
   # Just to be safe, revoke privileges from all databases.
   for DB in $dblist; do
     echo "Revoking $USERNAME privileges from database $DB..."
+    # DROP USER also fails if the role owns any tables (e.g. from past
+    # migrations), not just a database — reassign those too. No DROP OWNED
+    # after this: run_sql swallows failures, so if REASSIGN quietly failed,
+    # DROP OWNED would delete the role's tables instead of leaving them
+    # with a stuck role — a stuck role is the safer failure mode.
+    run_sql "$DB" "REASSIGN OWNED BY \"$USERNAME\" TO root;"
     run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
     run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
     run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"

@@ -19,25 +19,35 @@ resource "null_resource" "iam_db_user" {
   for_each   = local.combined_iam_db_users
   depends_on = [module.database]
 
-  triggers = {
-    username    = each.key
-    cluster_arn = module.database.cluster_arn
-    secret_arn  = module.database.cluster_master_user_secret[0].secret_arn
-    region      = data.aws_region.current.region
-    engine      = var.engine
-    databases   = join(",", each.value.databases)
-    privileges  = each.value.privileges
-  }
+  # Only merged in for apps-sourced usernames — adding these keys for every
+  # entry would change legacy roles' triggers shape and force-replace them.
+  triggers = merge(
+    {
+      username    = each.key
+      cluster_arn = module.database.cluster_arn
+      secret_arn  = module.database.cluster_master_user_secret[0].secret_arn
+      region      = data.aws_region.current.region
+      engine      = var.engine
+      databases   = join(",", each.value.databases)
+      privileges  = each.value.privileges
+    },
+    contains(local.apps_service_usernames, each.key) ? {
+      manage_databases    = "true"
+      owned_databases_csv = join(",", lookup(local.apps_service_owned_databases, each.key, []))
+    } : {}
+  )
 
   provisioner "local-exec" {
     command = templatefile("${path.module}/templates/iam-user-create.sh.tftpl", {
-      username      = each.key
-      cluster_arn   = module.database.cluster_arn
-      secret_arn    = module.database.cluster_master_user_secret[0].secret_arn
-      region        = data.aws_region.current.region
-      engine        = var.engine
-      databases_csv = join(",", each.value.databases)
-      privileges    = each.value.privileges
+      username            = each.key
+      cluster_arn         = module.database.cluster_arn
+      secret_arn          = module.database.cluster_master_user_secret[0].secret_arn
+      region              = data.aws_region.current.region
+      engine              = var.engine
+      databases_csv       = join(",", each.value.databases)
+      privileges          = each.value.privileges
+      manage_databases    = contains(local.apps_service_usernames, each.key)
+      owned_databases_csv = join(",", lookup(local.apps_service_owned_databases, each.key, []))
     })
     interpreter = ["bash", "-c"]
   }
@@ -45,11 +55,13 @@ resource "null_resource" "iam_db_user" {
   provisioner "local-exec" {
     when = destroy
     command = templatefile("${path.module}/templates/iam-user-destroy.sh.tftpl", {
-      username    = self.triggers.username
-      cluster_arn = self.triggers.cluster_arn
-      secret_arn  = self.triggers.secret_arn
-      region      = self.triggers.region
-      engine      = self.triggers.engine
+      username            = self.triggers.username
+      cluster_arn         = self.triggers.cluster_arn
+      secret_arn          = self.triggers.secret_arn
+      region              = self.triggers.region
+      engine              = self.triggers.engine
+      manage_databases    = lookup(self.triggers, "manage_databases", "false")
+      owned_databases_csv = lookup(self.triggers, "owned_databases_csv", "")
     })
     interpreter = ["bash", "-c"]
   }

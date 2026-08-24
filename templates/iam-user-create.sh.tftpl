@@ -16,6 +16,8 @@ REGION="${region}"
 PRIVILEGES="${privileges}"
 SECRET_ARN="${secret_arn}"
 USERNAME="${username}"
+MANAGE_DATABASES="${manage_databases}"
+OWNED_DATABASES_CSV="${owned_databases_csv}"
 
 # Disable the AWS pager.
 export AWS_PAGER=""
@@ -105,6 +107,58 @@ elif [ "$ENGINE" = "postgresql" ]; then
     "DO \$\$BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$USERNAME') THEN CREATE USER \"$USERNAME\"; END IF; END\$\$;"
   run_sql "postgres" "GRANT rds_iam TO \"$USERNAME\";"
 
+  # Owned databases get CREATE via ownership; shared ones are owned by
+  # root and get an explicit grant below instead (see README).
+  if [ "$MANAGE_DATABASES" = "true" ]; then
+    # root needs role membership to set ownership (no SET ROLE involved).
+    run_sql "postgres" "GRANT \"$USERNAME\" TO root;"
+
+    IFS=',' read -ra OWNED_DBS <<< "$OWNED_DATABASES_CSV"
+    IFS=',' read -ra ALL_DBS <<< "$DATABASES_CSV"
+
+    for DB in "$${ALL_DBS[@]}"; do
+      is_owner=false
+      for owned in "$${OWNED_DBS[@]:-}"; do
+        [ "$owned" = "$DB" ] && { is_owner=true; break; }
+      done
+
+      exists=$(run_sql "postgres" "SELECT 1 FROM pg_database WHERE datname = '$DB';" true | jq -r '.records | length')
+      if [ "$exists" = "0" ]; then
+        if $is_owner; then
+          echo "Creating database $DB owned by $USERNAME..."
+          run_sql "postgres" "CREATE DATABASE \"$DB\" OWNER \"$USERNAME\";"
+        else
+          echo "Creating shared database $DB (no single owner)..."
+          if ! run_sql "postgres" "CREATE DATABASE \"$DB\";"; then
+            # A sibling service may have won the create race — only a real
+            # failure if it's still missing.
+            still_missing=$(run_sql "postgres" "SELECT 1 FROM pg_database WHERE datname = '$DB';" true | jq -r '.records | length')
+            if [ "$still_missing" = "0" ]; then
+              echo "Failed to create database $DB"
+              exit 1
+            fi
+          fi
+        fi
+      elif $is_owner; then
+        # Owner may have drifted since creation — reconcile rather than
+        # assume it still holds.
+        current_owner=$(run_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = '$DB';" true | jq -r '.records[0][0].stringValue')
+        if [ "$current_owner" != "$USERNAME" ]; then
+          echo "Reassigning database $DB ownership from $current_owner to $USERNAME..."
+          run_sql "postgres" "ALTER DATABASE \"$DB\" OWNER TO \"$USERNAME\";"
+        fi
+      else
+        # Not the designated owner — reclaim any prior owner, since
+        # shared databases must not leave one behind.
+        current_owner=$(run_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = '$DB';" true | jq -r '.records[0][0].stringValue')
+        if [ "$current_owner" != "root" ]; then
+          echo "Reclaiming database $DB ownership from $current_owner to root (no longer single-owned)..."
+          run_sql "postgres" "ALTER DATABASE \"$DB\" OWNER TO root;"
+        fi
+      fi
+    done
+  fi
+
   # Get a list of all existing databases.
   dblist=$(
     run_sql "postgres" \
@@ -145,6 +199,16 @@ elif [ "$ENGINE" = "postgresql" ]; then
       run_sql "$DB" "GRANT $GRANT_CLAUSE ON ALL SEQUENCES IN SCHEMA public TO \"$USERNAME\";"
       run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT $GRANT_CLAUSE ON TABLES TO \"$USERNAME\";"
       run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT $GRANT_CLAUSE ON SEQUENCES TO \"$USERNAME\";"
+
+      # Owner gets CREATE via PG15+'s pg_database_owner; a role with no
+      # ownership on this database needs it granted directly.
+      if [ "$MANAGE_DATABASES" = "true" ]; then
+        owns_db=false
+        for owned in "$${OWNED_DBS[@]:-}"; do
+          [ "$owned" = "$DB" ] && { owns_db=true; break; }
+        done
+        $owns_db || run_sql "$DB" "GRANT CREATE ON SCHEMA public TO \"$USERNAME\";"
+      fi
     done
 
     # Make sure the user doesn't have access to any other databases.
