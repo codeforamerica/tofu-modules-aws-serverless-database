@@ -174,6 +174,15 @@ locals {
     if length(sources) > 1
   }
 
+  # Postgres truncates identifiers over 63 bytes (ASCII-only here, so
+  # length() in characters and bytes agree -- revisit if names ever allow
+  # non-ASCII). Rejecting these outright means truncation can't happen at
+  # all, not just that a resulting collision gets caught.
+  overlong_usernames = [
+    for e in local.all_username_sources : e.source
+    if length(e.username) > 63
+  ]
+
   apps_database_collision_message = join("; ", [
     for name, sources in local.apps_database_collisions :
     "\"${name}\" claimed by ${join(" and ", sources)}"
@@ -184,10 +193,12 @@ locals {
     "\"${name}\" claimed by ${join(" and ", sources)}"
   ])
 
+  overlong_usernames_message = join("; ", local.overlong_usernames)
+
   apps_undeclared_service_extra_databases_message = join("; ", local.apps_undeclared_service_extra_databases)
 }
 
-# All three checks below only exist once `apps` is used, so a caller who
+# All four checks below only exist once `apps` is used, so a caller who
 # never touches it (every existing iam_db_users/db_users consumer today)
 # sees no new resources in their plan at all.
 
@@ -220,6 +231,17 @@ resource "terraform_data" "apps_service_extra_databases_check" {
     precondition {
       condition     = length(local.apps_undeclared_service_extra_databases) == 0
       error_message = "Service extra_databases not declared by their app: ${local.apps_undeclared_service_extra_databases_message}. Add the entry to the app's own extra_databases first."
+    }
+  }
+}
+
+resource "terraform_data" "username_length_check" {
+  count = length(var.apps) > 0 ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = length(local.overlong_usernames) == 0
+      error_message = "Username(s) over Postgres's 63-byte limit: ${local.overlong_usernames_message}. Shorten the app or service name so the derived username fits."
     }
   }
 }
