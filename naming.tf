@@ -174,17 +174,14 @@ locals {
     if length(sources) > 1
   }
 
-  # Postgres truncates identifiers at 63 bytes -- two different usernames
-  # can still collide there even though username_collisions sees them as distinct.
-  truncated_username_groups = {
-    for truncated in distinct([for e in local.all_username_sources : substr(e.username, 0, 63)]) :
-    truncated => distinct([for e in local.all_username_sources : e.username if substr(e.username, 0, 63) == truncated])
-  }
-
-  truncated_username_collisions = {
-    for truncated, usernames in local.truncated_username_groups : truncated => usernames
-    if length(usernames) > 1
-  }
+  # Postgres truncates identifiers over 63 bytes (ASCII-only here, so
+  # length() in characters and bytes agree -- revisit if names ever allow
+  # non-ASCII). Rejecting these outright means truncation can't happen at
+  # all, not just that a resulting collision gets caught.
+  overlong_usernames = [
+    for e in local.all_username_sources : e.source
+    if length(e.username) > 63
+  ]
 
   apps_database_collision_message = join("; ", [
     for name, sources in local.apps_database_collisions :
@@ -196,10 +193,7 @@ locals {
     "\"${name}\" claimed by ${join(" and ", sources)}"
   ])
 
-  truncated_username_collision_message = join("; ", [
-    for truncated, usernames in local.truncated_username_collisions :
-    "\"${truncated}\" claimed by ${join(" and ", usernames)}"
-  ])
+  overlong_usernames_message = join("; ", local.overlong_usernames)
 
   apps_undeclared_service_extra_databases_message = join("; ", local.apps_undeclared_service_extra_databases)
 }
@@ -241,13 +235,13 @@ resource "terraform_data" "apps_service_extra_databases_check" {
   }
 }
 
-resource "terraform_data" "truncated_username_collision_check" {
+resource "terraform_data" "username_length_check" {
   count = length(var.apps) > 0 ? 1 : 0
 
   lifecycle {
     precondition {
-      condition     = length(local.truncated_username_collisions) == 0
-      error_message = "Username(s) collide once Postgres truncates them to 63 bytes: ${local.truncated_username_collision_message}. Shorten the app or service name so the derived username fits."
+      condition     = length(local.overlong_usernames) == 0
+      error_message = "Username(s) over Postgres's 63-byte limit: ${local.overlong_usernames_message}. Shorten the app or service name so the derived username fits."
     }
   }
 }
