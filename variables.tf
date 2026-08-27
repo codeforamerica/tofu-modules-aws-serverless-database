@@ -281,6 +281,17 @@ variable "enable_data_api" {
   default     = false
 }
 
+variable "enforce_ssl" {
+  type        = bool
+  description = <<-EOT
+    Whether to require SSL/TLS for all connections to the database cluster.
+    Sets `rds.force_ssl` for `"postgresql"` or `require_secure_transport` for
+    `"mysql"` via the cluster parameter group. Set to `false` to allow
+    unencrypted connections.
+    EOT
+  default     = true
+}
+
 variable "engine" {
   type        = string
   description = <<-EOT

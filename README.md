@@ -83,6 +83,7 @@ specifying short names for your project and (optionally) service using the
 | configure_aws_backup              | Whether to configure AWS Backup with the defined backup schedules.                                                                                                                                                                                 | `bool`         | `false`        | no       |
 | [db_users]                        | Map of database users to create on the cluster. The map key becomes the database username. Requires `enable_data_api = true` and the AWS CLI must be installed on the OpenTofu runner.                                                             | `map(object)`  | `{}`           | no       |
 | enable_data_api                   | Whether to enable the [Data API][data-api] for the database cluster.                                                                                                                                                                               | `bool`         | `false`        | no       |
+| [enforce_ssl]                     | Whether to require SSL/TLS for all connections to the database cluster.                                                                                                                                                                            | `bool`         | `true`         | no       |
 | engine                            | Database engine to use for the cluster. Valid values are `"mysql"` and `"postgresql"`.                                                                                                                                                             | `string`       | `"postgresql"` | no       |
 | engine_version                    | Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime.                                                                                                                | `string`       | `null`         | no       |
 | environment                       | Environment for the project.                                                                                                                                                                                                                       | `string`       | `"dev"`        | no       |
@@ -339,6 +340,30 @@ cluster_parameters = [
 | value        | Value to set the parameter to.                                      | `string` | n/a           | yes      |
 | apply_method | How to apply the parameter. Can be `immediate` or `pending-reboot`. | `string` | `"immediate"` | no       |
 
+### enforce_ssl
+
+By default, this module requires SSL/TLS for all connections to the database
+cluster by setting `rds.force_ssl` (PostgreSQL) or `require_secure_transport`
+(MySQL) to `"1"` via the cluster parameter group. Set `enforce_ssl = false` to
+allow unencrypted connections.
+
+```hcl
+enforce_ssl = false
+```
+
+This is implemented as a `cluster_parameters` entry under the hood, so an
+entry you set explicitly for `rds.force_ssl` or `require_secure_transport` in
+[`cluster_parameters`][cluster_parameters] takes precedence over `enforce_ssl`.
+
+> [!WARNING]
+> Because `enforce_ssl` defaults to `true`, applying this module version
+> against an existing cluster that has never set `cluster_parameters` will
+> flip `create_db_cluster_parameter_group` from `false` to `true`, moving the
+> cluster off AWS's default parameter group. As described above, this is
+> always treated as `pending-reboot`, regardless of `apply_method` — a manual
+> `aws rds failover-db-cluster` (or instance reboot, for a single-instance
+> cluster) is required for SSL enforcement to take effect.
+
 ### db_users
 
 > [!WARNING]
@@ -512,6 +537,7 @@ security_group_rules = {
 [cluster_parameters]: #cluster_parameters
 [data-api]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html
 [db_users]: #db_users
+[enforce_ssl]: #enforce_ssl
 [iam-auth]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html
 [latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
 [security_group_rules]: #security_group_rules
