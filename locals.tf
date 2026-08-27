@@ -1,6 +1,21 @@
 locals {
   auto_backup_retention = coalesce(var.automatic_backup_retention_period, var.backup_retention_period)
 
+  # Enforce SSL/TLS by default, using the parameter appropriate to the
+  # engine. A parameter already present in var.cluster_parameters takes
+  # precedence, so users can still override the value or apply_method.
+  ssl_parameter_name = var.engine == "postgresql" ? "rds.force_ssl" : "require_secure_transport"
+  cluster_parameters = values(merge(
+    var.enforce_ssl ? {
+      (local.ssl_parameter_name) = {
+        name         = local.ssl_parameter_name
+        value        = "1"
+        apply_method = "immediate"
+      }
+    } : {},
+    { for p in var.cluster_parameters : p.name => p }
+  ))
+
   prefix        = "${var.project}-${var.environment}${var.service != "" ? "-${var.service}" : ""}"
   port          = var.engine == "postgresql" ? 5432 : 3306
   project_short = var.project_short != "" ? var.project_short : var.project

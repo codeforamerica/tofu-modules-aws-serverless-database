@@ -17,9 +17,9 @@ module "database" {
   deletion_protection    = !var.force_delete
   enable_http_endpoint   = var.enable_data_api
 
-  create_db_cluster_parameter_group     = length(var.cluster_parameters) > 0
+  create_db_cluster_parameter_group     = length(local.cluster_parameters) > 0
   db_cluster_parameter_group_family     = data.aws_rds_engine_version.this.parameter_group_family
-  db_cluster_parameter_group_parameters = var.cluster_parameters
+  db_cluster_parameter_group_parameters = local.cluster_parameters
 
   iam_role_name                       = "${local.short_prefix}-db-mon"
   iam_role_use_name_prefix            = true
