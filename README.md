@@ -363,6 +363,12 @@ entry you set explicitly for `rds.force_ssl` or `require_secure_transport` in
 > always treated as `pending-reboot`, regardless of `apply_method` — a manual
 > `aws rds failover-db-cluster` (or instance reboot, for a single-instance
 > cluster) is required for SSL enforcement to take effect.
+>
+> For `"postgresql"`, a reboot is required either way: `rds.force_ssl` is a
+> [static parameter][parameter-groups], which only ever applies via
+> `pending-reboot`, even on a cluster already using a custom parameter group.
+> `"mysql"`'s `require_secure_transport` is dynamic and applies immediately
+> with no reboot once the cluster is already on a custom parameter group.
 
 ### db_users
 
@@ -540,4 +546,5 @@ security_group_rules = {
 [enforce_ssl]: #enforce_ssl
 [iam-auth]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html
 [latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
+[parameter-groups]: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/parameter-groups-overview.html
 [security_group_rules]: #security_group_rules
