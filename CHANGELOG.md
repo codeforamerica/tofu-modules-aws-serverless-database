@@ -10,11 +10,7 @@ and this project adheres to
 
 ### Feat
 
-- enforce SSL/TLS connections to the database by default (#44)
-
-### Fix
-
-- use pending-reboot apply_method for rds.force_ssl (#44)
+- Enforce SSL/TLS connections to the database by default (#44)
 
 ## 1.10.1 (2026-08-25)
 
