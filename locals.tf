@@ -1,6 +1,11 @@
 locals {
   auto_backup_retention = coalesce(var.automatic_backup_retention_period, var.backup_retention_period)
 
+  # Secondary Global Database members are read-only and replicate their
+  # data (including auth) from the primary, so IAM/db-user provisioning
+  # only runs on the primary.
+  user_provisioning_enabled = var.is_primary_cluster
+
   # Enforce SSL/TLS by default, using the parameter appropriate to the
   # engine. A parameter already present in var.cluster_parameters takes
   # precedence, so users can still override the value or apply_method.

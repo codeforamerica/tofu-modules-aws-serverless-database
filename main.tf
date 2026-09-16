@@ -10,12 +10,15 @@ module "database" {
   engine_mode            = "provisioned"
   storage_encrypted      = true
   kms_key_id             = aws_kms_key.database.arn
-  master_username        = "root"
   subnets                = var.subnets
   copy_tags_to_snapshot  = true
   snapshot_identifier    = var.snapshot_identifier
   deletion_protection    = !var.force_delete
   enable_http_endpoint   = var.enable_data_api
+
+  is_primary_cluster        = var.is_primary_cluster
+  global_cluster_identifier = var.global_cluster_identifier
+  source_region             = var.source_region
 
   create_db_cluster_parameter_group     = length(local.cluster_parameters) > 0
   db_cluster_parameter_group_family     = data.aws_rds_engine_version.this.parameter_group_family
@@ -31,9 +34,10 @@ module "database" {
   vpc_id               = var.vpc_id
   security_group_rules = local.security_group_rules
 
-  manage_master_user_password                            = true
-  manage_master_user_password_rotation                   = var.password_rotation_frequency > 0
-  master_user_password_rotation_automatically_after_days = var.password_rotation_frequency
+  master_username                                        = var.is_primary_cluster ? "root" : null
+  manage_master_user_password                            = var.is_primary_cluster
+  manage_master_user_password_rotation                   = var.is_primary_cluster && var.password_rotation_frequency > 0
+  master_user_password_rotation_automatically_after_days = var.is_primary_cluster ? var.password_rotation_frequency : null
 
   cloudwatch_log_group_kms_key_id        = var.logging_key_arn
   cloudwatch_log_group_retention_in_days = 7
@@ -42,7 +46,7 @@ module "database" {
   performance_insights_retention_period  = 7
 
   # TODO: Create a database KMS key
-  master_user_secret_kms_key_id = var.secrets_key_arn
+  master_user_secret_kms_key_id = var.is_primary_cluster ? var.secrets_key_arn : null
 
   monitoring_interval = 60
 

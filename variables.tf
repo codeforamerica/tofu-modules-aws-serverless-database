@@ -330,6 +330,21 @@ variable "force_delete" {
   default     = false
 }
 
+variable "global_cluster_identifier" {
+  type        = string
+  description = <<-EOT
+    ID of the `aws_rds_global_cluster` this instance should join. Required
+    when `is_primary_cluster` is `false`. The `aws_rds_global_cluster`
+    resource itself is created by the consumer, not this module.
+    EOT
+  default     = null
+
+  validation {
+    condition     = var.is_primary_cluster || var.global_cluster_identifier != null
+    error_message = "global_cluster_identifier must be set when is_primary_cluster is false."
+  }
+}
+
 variable "logging_key_arn" {
   type        = string
   description = "ARN of the KMS key for logging."
@@ -425,6 +440,26 @@ variable "instances" {
   description = "Number of instances to create in the database cluster."
   default     = 2
 }
+
+variable "is_primary_cluster" {
+  type        = bool
+  description = <<-EOT
+    Whether this instance is the primary member of an Aurora Global
+    Database. Set to `false` for a secondary-region instantiation. Defaults
+    to `true`, preserving standalone-cluster behavior for consumers that
+    don't opt in to Global Database. When `false`, this module skips
+    master-credential management and its own IAM/db-user provisioning
+    (`iam_db_users`, `db_users`, `apps`), since a secondary cluster
+    replicates data from the primary and is read-only.
+    EOT
+  default     = true
+
+  validation {
+    condition     = var.is_primary_cluster || var.snapshot_identifier == ""
+    error_message = "snapshot_identifier cannot be set when is_primary_cluster is false; secondary Global Database members are seeded by replication from the primary, not by restoring a snapshot."
+  }
+}
+
 variable "key_recovery_period" {
   type        = number
   default     = 30
@@ -531,6 +566,22 @@ variable "snapshot_identifier" {
     applicable on create.
     EOT
   default     = ""
+}
+
+variable "source_region" {
+  type        = string
+  description = <<-EOT
+    Region of the primary cluster. Required by the AWS RDS API when
+    creating an encrypted secondary cluster in a different region (this
+    module always sets `storage_encrypted = true`). Only meaningful when
+    `is_primary_cluster` is `false`.
+    EOT
+  default     = null
+
+  validation {
+    condition     = var.is_primary_cluster || var.source_region != null
+    error_message = "source_region must be set when is_primary_cluster is false, because this module's clusters are always storage_encrypted."
+  }
 }
 
 variable "subnets" {

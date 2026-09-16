@@ -88,9 +88,11 @@ specifying short names for your project and (optionally) service using the
 | engine_version                    | Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime.                                                                                                                | `string`       | `null`         | no       |
 | environment                       | Environment for the project.                                                                                                                                                                                                                       | `string`       | `"dev"`        | no       |
 | force_delete                      | Force deletion of resources. If changing to true, be sure to apply before destroying.                                                                                                                                                              | `bool`         | `false`        | no       |
+| [global_cluster_identifier]       | ID of the `aws_rds_global_cluster` this instance should join. Required when `is_primary_cluster` is `false`.                                                                                                                                       | `string`       | `null`         | no       |
 | iam_authentication                | Whether to enable IAM authentication for the database cluster.                                                                                                                                                                                     | `bool`         | `true`         | no       |
 | [iam_db_users]                    | Map of IAM database users to create on the cluster. The map key becomes the database username. Requires `iam_authentication = true` and the AWS CLI must be installed on the OpenTofu runner.                                                      | `map(object)`  | `{}`           | no       |
 | instances                         | Number of instances to create in the database cluster.                                                                                                                                                                                             | `number`       | `2`            | no       |
+| [is_primary_cluster]              | Whether this instance is the primary member of an Aurora Global Database. Set to `false` for a secondary-region instantiation.                                                                                                                    | `bool`         | `true`         | no       |
 | key_recovery_period               | Recovery period for deleted KMS keys in days. Must be between `7` and `30`.                                                                                                                                                                        | `number`       | `30`           | no       |
 | min_capacity                      | Minimum capacity for the serverless cluster in ACUs.                                                                                                                                                                                               | `number`       | `2`            | no       |
 | max_capacity                      | Maximum capacity for the serverless cluster in ACUs.                                                                                                                                                                                               | `number`       | `10`           | no       |
@@ -101,6 +103,7 @@ specifying short names for your project and (optionally) service using the
 | [security_group_rules]            | Security group rules to control cluster ingress and egress.                                                                                                                                                                                        | `map(object)`  | `{}`           | no       |
 | skip_final_snapshot               | Whether to skip the final snapshot when destroying the database cluster.                                                                                                                                                                           | `bool`         | `false`        | no       |
 | snapshot_identifier               | Optional name or ARN of the snapshot to restore the cluster from. Only applicable on create.                                                                                                                                                       | `bool`         | `false`        | no       |
+| [source_region]                   | Region of the primary cluster. Required by the AWS RDS API for encrypted secondary clusters when `is_primary_cluster` is `false`.                                                                                                                 | `string`       | `null`         | no       |
 | tags                              | Optional tags to be applied to all resources.                                                                                                                                                                                                      | `map(string)`  | `{}`           | no       |
 
 ### apps
@@ -517,6 +520,82 @@ security_group_rules = {
 | prefix_list_ids          | List of prefix list IDs to allow access.                                  | `list(string)` | `[]`                    | no       |
 | source_security_group_id | ID of another security group to allow access.                             | `string`       | `null`                  | no       |
 
+### Global Database
+
+This module can be the primary or a secondary member of an
+[Aurora Global Database][aurora-global-database]. It doesn't create the
+`aws_rds_global_cluster` resource, provider aliases, or cross-region
+networking — set those up yourself, same as the
+[`examples/global-cluster`][tf-aws-rds-aurora] pattern from the underlying
+module.
+
+```hcl
+provider "aws" {
+  region = "us-east-1"
+}
+
+provider "aws" {
+  alias  = "secondary"
+  region = "us-west-2"
+}
+
+resource "aws_rds_global_cluster" "this" {
+  global_cluster_identifier = "my-project-prod"
+  engine                    = "aurora-postgresql"
+  engine_version            = "16.4"
+  storage_encrypted         = true
+}
+
+module "primary" {
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.12.0"
+
+  project     = "my-project"
+  environment = "prod"
+
+  logging_key_arn = module.logging.kms_key_arn
+  secrets_key_arn = module.secrets.kms_key_arn
+  vpc_id          = module.vpc.vpc_id
+  subnets         = module.vpc.private_subnets
+  ingress_cidrs   = module.vpc.private_subnets_cidr_blocks
+
+  engine_version            = "16.4"
+  global_cluster_identifier = aws_rds_global_cluster.this.id
+}
+
+module "secondary" {
+  source    = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.12.0"
+  providers = { aws = aws.secondary }
+
+  project     = "my-project"
+  environment = "prod"
+
+  # KMS keys are regional - these must be from the secondary region.
+  logging_key_arn = module.secondary_logging.kms_key_arn
+  secrets_key_arn = module.secondary_secrets.kms_key_arn
+  vpc_id          = module.secondary_vpc.vpc_id
+  subnets         = module.secondary_vpc.private_subnets
+  ingress_cidrs   = module.secondary_vpc.private_subnets_cidr_blocks
+
+  engine_version            = "16.4"
+  is_primary_cluster        = false
+  global_cluster_identifier = aws_rds_global_cluster.this.id
+  source_region             = "us-east-1"
+
+  depends_on = [module.primary]
+}
+```
+
+> [!IMPORTANT]
+> - `logging_key_arn` and `secrets_key_arn` for the secondary call must be
+>   keys that exist in the secondary region — KMS keys are regional.
+> - Pin `engine_version` and use the same value on both calls. Left `null`,
+>   each region resolves its own "latest," which can differ and break the
+>   version match Global Database requires.
+> - `iam_db_users`, `db_users`, and `apps` are skipped on the secondary —
+>   that data replicates from the primary.
+> - `global_cluster_identifier` and `source_region` are required, and
+>   `snapshot_identifier` is rejected, when `is_primary_cluster` is `false`.
+
 ## Outputs
 
 | Name                     | Description                                                                                               | Type          |
@@ -529,7 +608,7 @@ security_group_rules = {
 | cluster_resource_id      | Resource ID of the RDS database cluster.                                                                  | `string`      |
 | db_user_secret_arns      | Map of database username to the ARN of the Secrets Manager secret containing their credentials.           | `map(string)` |
 | iam_db_user_policy_arns  | Map of IAM database username to the ARN of the IAM policy granting `rds-db:connect` access for that user. | `map(string)` |
-| secret_arn               | ARN of the secret holding database credentials.                                                           | `string`      |
+| secret_arn               | ARN of the secret holding database credentials. `null` when `is_primary_cluster` is `false`.              | `string`      |
 
 [acus]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html#aurora-serverless-v2.how-it-works.capacity
 [aurora-serverless]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html
@@ -544,7 +623,12 @@ security_group_rules = {
 [data-api]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html
 [db_users]: #db_users
 [enforce_ssl]: #enforce_ssl
+[global_cluster_identifier]: #global-database
 [iam-auth]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html
+[is_primary_cluster]: #global-database
+[aurora-global-database]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html
 [latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
 [parameter-groups]: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/parameter-groups-overview.html
 [security_group_rules]: #security_group_rules
+[source_region]: #global-database
+[tf-aws-rds-aurora]: https://github.com/terraform-aws-modules/terraform-aws-rds-aurora
