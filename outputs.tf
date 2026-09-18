@@ -48,3 +48,13 @@ output "secret_arn" {
   description = "ARN of the secret containing the user credentials."
   value       = module.database.cluster_master_user_secret[0].secret_arn
 }
+
+output "replica_cluster_endpoint" {
+  description = "Endpoint of the replica cluster, if created."
+  value       = var.replica_region != null ? module.database_replica["this"].cluster_endpoint : null
+}
+
+output "global_cluster_id" {
+  description = "ID of the Aurora Global Database, if created."
+  value       = var.replica_region != null ? aws_rds_global_cluster.this["this"].id : null
+}

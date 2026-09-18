@@ -1,6 +1,17 @@
 locals {
   auto_backup_retention = coalesce(var.automatic_backup_retention_period, var.backup_retention_period)
 
+  # Marks this cluster's role in the Aurora Global Database topology, for
+  # the primary/replica resources specifically (not the unrelated backup
+  # replication resources in backups.tf).
+  tags         = merge(var.tags, { "multi-region" = var.replica_region != null ? "primary" : "disabled" })
+  replica_tags = merge(var.tags, { "multi-region" = "replica" })
+
+  # Resolved once so the primary and replica clusters always end up on the
+  # exact same engine version - each region can otherwise independently
+  # resolve a different "latest", which Aurora Global Database rejects.
+  engine_version = coalesce(var.engine_version, data.aws_rds_engine_version.this.version)
+
   # Enforce SSL/TLS by default, using the parameter appropriate to the
   # engine. A parameter already present in var.cluster_parameters takes
   # precedence, so users can still override the value or apply_method.
@@ -40,6 +51,34 @@ locals {
     },
     {
       for key, rule in var.security_group_rules : key => {
+        description              = rule.description
+        type                     = rule.type
+        protocol                 = rule.protocol
+        from_port                = rule.from_port == null ? local.port : rule.from_port
+        to_port                  = rule.to_port == null ? local.port : rule.to_port
+        cidr_blocks              = rule.cidr_blocks
+        ipv6_cidr_blocks         = rule.ipv6_cidr_blocks
+        prefix_list_ids          = rule.prefix_list_ids
+        source_security_group_id = rule.source_security_group_id
+      }
+    }
+  )
+
+  # Same merge as security_group_rules above, but for the replica cluster's
+  # own region/CIDRs.
+  replica_security_group_rules = merge(
+    length(var.replica_ingress_cidrs) == 0 ? {} : {
+      ingress_cidrs = {
+        description = "Allow ingress from specified CIDR blocks."
+        type        = "ingress"
+        protocol    = "tcp"
+        from_port   = local.port
+        to_port     = local.port
+        cidr_blocks = var.replica_ingress_cidrs
+      }
+    },
+    {
+      for key, rule in var.replica_security_group_rules : key => {
         description              = rule.description
         type                     = rule.type
         protocol                 = rule.protocol

@@ -4,6 +4,11 @@ data "aws_partition" "current" {}
 
 data "aws_region" "current" {}
 
+data "aws_region" "replica" {
+  for_each = var.replica_region != null ? toset(["this"]) : toset([])
+  provider = aws.replica
+}
+
 data "aws_rds_engine_version" "this" {
   engine  = "aurora-${var.engine}"
   version = var.engine_version

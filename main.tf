@@ -6,7 +6,7 @@ module "database" {
   create_db_subnet_group = true
   db_subnet_group_name   = local.prefix
   engine                 = "aurora-${var.engine}"
-  engine_version         = var.engine_version
+  engine_version         = var.replica_region == null ? var.engine_version : local.engine_version
   engine_mode            = "provisioned"
   storage_encrypted      = true
   kms_key_id             = aws_kms_key.database.arn
@@ -68,5 +68,5 @@ module "database" {
   }
 
   cluster_tags = var.configure_aws_backup ? { "aws-backup/rds" = "daily" } : {}
-  tags         = var.tags
+  tags         = local.tags
 }

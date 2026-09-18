@@ -3,8 +3,9 @@ terraform {
 
   required_providers {
     aws = {
-      version = ">= 5.44"
-      source  = "hashicorp/aws"
+      version               = ">= 5.44"
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.replica]
     }
     null = {
       version = ">= 3.0"

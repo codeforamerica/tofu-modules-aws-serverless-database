@@ -425,6 +425,7 @@ variable "instances" {
   description = "Number of instances to create in the database cluster."
   default     = 2
 }
+
 variable "key_recovery_period" {
   type        = number
   default     = 30
@@ -531,6 +532,95 @@ variable "snapshot_identifier" {
     applicable on create.
     EOT
   default     = ""
+}
+
+variable "replica_region" {
+  type        = string
+  description = <<-EOT
+    Region to create a live, failover-ready read replica cluster in, using
+    Aurora Global Database. If not specified, no replica is created. Setting
+    this requires passing a second AWS provider into the module, aliased as
+    `aws.replica`, configured for this region.
+    EOT
+  default     = null
+
+  validation {
+    condition     = var.replica_region == null || var.replica_region != data.aws_region.current.region
+    error_message = "replica_region must be different from the region the primary cluster is created in."
+  }
+}
+
+variable "replica_vpc_id" {
+  type        = string
+  description = "Id of the VPC to launch the replica cluster into. Required when replica_region is set."
+  default     = null
+
+  validation {
+    condition     = var.replica_region == null || var.replica_vpc_id != null
+    error_message = "replica_vpc_id must be set when replica_region is set."
+  }
+}
+
+variable "replica_subnets" {
+  type        = list(string)
+  description = "List of subnet ids the replica cluster's instances may be placed in. Required when replica_region is set."
+  default     = []
+
+  validation {
+    condition     = var.replica_region == null || length(var.replica_subnets) > 0
+    error_message = "replica_subnets must be set when replica_region is set."
+  }
+}
+
+variable "replica_ingress_cidrs" {
+  type        = list(string)
+  description = "List of CIDR blocks to allow ingress on the replica cluster. This is typically the replica region's private subnets."
+  default     = []
+}
+
+variable "replica_security_group_rules" {
+  type = map(object({
+    description              = optional(string, "Managed by OpenTofu")
+    type                     = optional(string, "ingress")
+    protocol                 = optional(string, "tcp")
+    from_port                = optional(number)
+    to_port                  = optional(number)
+    cidr_blocks              = optional(list(string), [])
+    ipv6_cidr_blocks         = optional(list(string), [])
+    prefix_list_ids          = optional(list(string), [])
+    source_security_group_id = optional(string, null)
+  }))
+  description = "Security group rules to control ingress and egress for the replica cluster."
+  default     = {}
+}
+
+variable "replica_logging_key_arn" {
+  type        = string
+  description = "ARN of the KMS key for the replica cluster's logging. Must be a key in replica_region. Required when replica_region is set."
+  default     = null
+
+  validation {
+    condition     = var.replica_region == null || var.replica_logging_key_arn != null
+    error_message = "replica_logging_key_arn must be set when replica_region is set."
+  }
+}
+
+variable "replica_min_capacity" {
+  type        = number
+  description = "Minimum capacity for the replica cluster in ACUs. Defaults to min_capacity."
+  default     = null
+}
+
+variable "replica_max_capacity" {
+  type        = number
+  description = "Maximum capacity for the replica cluster in ACUs. Defaults to max_capacity."
+  default     = null
+}
+
+variable "replica_instances" {
+  type        = number
+  description = "Number of instances to create in the replica cluster. Defaults to instances."
+  default     = null
 }
 
 variable "subnets" {

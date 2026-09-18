@@ -99,6 +99,7 @@ specifying short names for your project and (optionally) service using the
 | service                           | Optional service that these resources are supporting. Example: `"api"`, `"web"`, `"worker"`. Used in resource names to differentiate from other services.                                                                                          | `string`       | `""`           | no       |
 | service_short                     | Short name for the service. Used in resource names with character limits. Defaults to the same value as `service`.                                                                                                                                 | `string`       | `""`           | no       |
 | [security_group_rules]            | Security group rules to control cluster ingress and egress.                                                                                                                                                                                        | `map(object)`  | `{}`           | no       |
+| [replica_region]                  | Region to create a live, failover-ready read replica cluster in. If not set, no replica is created.                                                                                                                                               | `string`       | `null`         | no       |
 | skip_final_snapshot               | Whether to skip the final snapshot when destroying the database cluster.                                                                                                                                                                           | `bool`         | `false`        | no       |
 | snapshot_identifier               | Optional name or ARN of the snapshot to restore the cluster from. Only applicable on create.                                                                                                                                                       | `bool`         | `false`        | no       |
 | tags                              | Optional tags to be applied to all resources.                                                                                                                                                                                                      | `map(string)`  | `{}`           | no       |
@@ -517,6 +518,64 @@ security_group_rules = {
 | prefix_list_ids          | List of prefix list IDs to allow access.                                  | `list(string)` | `[]`                    | no       |
 | source_security_group_id | ID of another security group to allow access.                             | `string`       | `null`                  | no       |
 
+### replica_region
+
+Setting `replica_region` turns on a live, failover-ready read replica in
+another region, using [Aurora Global Database][aurora-global-database]. One
+module call manages both clusters — you don't instantiate this module twice.
+
+Because the replica lives in a different region, it needs its own VPC, its
+own KMS keys for logging/secrets, and a second AWS provider aliased as
+`aws.replica`, passed into the module:
+
+```hcl
+provider "aws" {
+  region = "us-east-1"
+}
+
+provider "aws" {
+  alias  = "replica"
+  region = "us-west-2"
+}
+
+module "database" {
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.12.0"
+  providers = {
+    aws         = aws
+    aws.replica = aws.replica
+  }
+
+  project     = "my-project"
+  environment = "prod"
+
+  logging_key_arn = module.logging.kms_key_arn
+  secrets_key_arn = module.secrets.kms_key_arn
+  vpc_id          = module.vpc.vpc_id
+  subnets         = module.vpc.private_subnets
+  ingress_cidrs   = module.vpc.private_subnets_cidr_blocks
+
+  replica_region          = "us-west-2"
+  replica_logging_key_arn = module.replica_logging.kms_key_arn
+  replica_vpc_id          = module.replica_vpc.vpc_id
+  replica_subnets         = module.replica_vpc.private_subnets
+  replica_ingress_cidrs   = module.replica_vpc.private_subnets_cidr_blocks
+}
+```
+
+> [!IMPORTANT]
+> - Because of `configuration_aliases`, **every** consumer of this module
+>   version must pass a `providers` block, even ones not using
+>   `replica_region` — map `aws.replica` back to the default `aws` provider
+>   as a no-op: `providers = { aws = aws, aws.replica = aws }`.
+> - `replica_logging_key_arn` must be a key that exists in `replica_region`
+>   — KMS keys are regional. The replica has no master-user secret of its
+>   own (it's read-only), so there's no `replica_secrets_key_arn`.
+> - `iam_db_users`, `db_users`, and `apps` only ever provision on the
+>   primary — that data replicates to the replica automatically.
+> - The replica defaults to the same `min_capacity`/`max_capacity`/
+>   `instances` as the primary; override with `replica_min_capacity`,
+>   `replica_max_capacity`, and `replica_instances`.
+
 ## Outputs
 
 | Name                     | Description                                                                                               | Type          |
@@ -528,7 +587,9 @@ security_group_rules = {
 | cluster_id               | ID of the RDS database cluster.                                                                           | `string`      |
 | cluster_resource_id      | Resource ID of the RDS database cluster.                                                                  | `string`      |
 | db_user_secret_arns      | Map of database username to the ARN of the Secrets Manager secret containing their credentials.           | `map(string)` |
+| global_cluster_id        | ID of the Aurora Global Database, if `replica_region` is set.                                             | `string`      |
 | iam_db_user_policy_arns  | Map of IAM database username to the ARN of the IAM policy granting `rds-db:connect` access for that user. | `map(string)` |
+| replica_cluster_endpoint | DNS endpoint of the replica cluster, if `replica_region` is set.                                          | `string`      |
 | secret_arn               | ARN of the secret holding database credentials.                                                           | `string`      |
 
 [acus]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html#aurora-serverless-v2.how-it-works.capacity
@@ -545,6 +606,8 @@ security_group_rules = {
 [db_users]: #db_users
 [enforce_ssl]: #enforce_ssl
 [iam-auth]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html
+[aurora-global-database]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html
 [latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
 [parameter-groups]: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/parameter-groups-overview.html
+[replica_region]: #replica_region
 [security_group_rules]: #security_group_rules
