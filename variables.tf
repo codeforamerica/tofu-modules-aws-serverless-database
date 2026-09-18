@@ -330,21 +330,6 @@ variable "force_delete" {
   default     = false
 }
 
-variable "global_cluster_identifier" {
-  type        = string
-  description = <<-EOT
-    ID of the `aws_rds_global_cluster` this instance should join. Required
-    when `is_primary_cluster` is `false`. The `aws_rds_global_cluster`
-    resource itself is created by the consumer, not this module.
-    EOT
-  default     = null
-
-  validation {
-    condition     = var.is_primary_cluster || var.global_cluster_identifier != null
-    error_message = "global_cluster_identifier must be set when is_primary_cluster is false."
-  }
-}
-
 variable "logging_key_arn" {
   type        = string
   description = "ARN of the KMS key for logging."
@@ -439,25 +424,6 @@ variable "instances" {
   type        = number
   description = "Number of instances to create in the database cluster."
   default     = 2
-}
-
-variable "is_primary_cluster" {
-  type        = bool
-  description = <<-EOT
-    Whether this instance is the primary member of an Aurora Global
-    Database. Set to `false` for a secondary-region instantiation. Defaults
-    to `true`, preserving standalone-cluster behavior for consumers that
-    don't opt in to Global Database. When `false`, this module skips
-    master-credential management and its own IAM/db-user provisioning
-    (`iam_db_users`, `db_users`, `apps`), since a secondary cluster
-    replicates data from the primary and is read-only.
-    EOT
-  default     = true
-
-  validation {
-    condition     = var.is_primary_cluster || var.snapshot_identifier == ""
-    error_message = "snapshot_identifier cannot be set when is_primary_cluster is false; secondary Global Database members are seeded by replication from the primary, not by restoring a snapshot."
-  }
 }
 
 variable "key_recovery_period" {
@@ -568,20 +534,93 @@ variable "snapshot_identifier" {
   default     = ""
 }
 
-variable "source_region" {
+variable "replica_region" {
   type        = string
   description = <<-EOT
-    Region of the primary cluster. Required by the AWS RDS API when
-    creating an encrypted secondary cluster in a different region (this
-    module always sets `storage_encrypted = true`). Only meaningful when
-    `is_primary_cluster` is `false`.
+    Region to create a live, failover-ready read replica cluster in, using
+    Aurora Global Database. If not specified, no replica is created. Setting
+    this requires passing a second AWS provider into the module, aliased as
+    `aws.replica`, configured for this region.
     EOT
   default     = null
 
   validation {
-    condition     = var.is_primary_cluster || var.source_region != null
-    error_message = "source_region must be set when is_primary_cluster is false, because this module's clusters are always storage_encrypted."
+    condition     = var.replica_region == null || var.replica_region != data.aws_region.current.region
+    error_message = "replica_region must be different from the region the primary cluster is created in."
   }
+}
+
+variable "replica_vpc_id" {
+  type        = string
+  description = "Id of the VPC to launch the replica cluster into. Required when replica_region is set."
+  default     = null
+
+  validation {
+    condition     = var.replica_region == null || var.replica_vpc_id != null
+    error_message = "replica_vpc_id must be set when replica_region is set."
+  }
+}
+
+variable "replica_subnets" {
+  type        = list(string)
+  description = "List of subnet ids the replica cluster's instances may be placed in. Required when replica_region is set."
+  default     = []
+
+  validation {
+    condition     = var.replica_region == null || length(var.replica_subnets) > 0
+    error_message = "replica_subnets must be set when replica_region is set."
+  }
+}
+
+variable "replica_ingress_cidrs" {
+  type        = list(string)
+  description = "List of CIDR blocks to allow ingress on the replica cluster. This is typically the replica region's private subnets."
+  default     = []
+}
+
+variable "replica_security_group_rules" {
+  type = map(object({
+    description              = optional(string, "Managed by OpenTofu")
+    type                     = optional(string, "ingress")
+    protocol                 = optional(string, "tcp")
+    from_port                = optional(number)
+    to_port                  = optional(number)
+    cidr_blocks              = optional(list(string), [])
+    ipv6_cidr_blocks         = optional(list(string), [])
+    prefix_list_ids          = optional(list(string), [])
+    source_security_group_id = optional(string, null)
+  }))
+  description = "Security group rules to control ingress and egress for the replica cluster."
+  default     = {}
+}
+
+variable "replica_logging_key_arn" {
+  type        = string
+  description = "ARN of the KMS key for the replica cluster's logging. Must be a key in replica_region. Required when replica_region is set."
+  default     = null
+
+  validation {
+    condition     = var.replica_region == null || var.replica_logging_key_arn != null
+    error_message = "replica_logging_key_arn must be set when replica_region is set."
+  }
+}
+
+variable "replica_min_capacity" {
+  type        = number
+  description = "Minimum capacity for the replica cluster in ACUs. Defaults to min_capacity."
+  default     = null
+}
+
+variable "replica_max_capacity" {
+  type        = number
+  description = "Maximum capacity for the replica cluster in ACUs. Defaults to max_capacity."
+  default     = null
+}
+
+variable "replica_instances" {
+  type        = number
+  description = "Number of instances to create in the replica cluster. Defaults to instances."
+  default     = null
 }
 
 variable "subnets" {

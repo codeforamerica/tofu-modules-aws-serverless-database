@@ -1,5 +1,5 @@
 resource "aws_iam_policy" "iam_db_user" {
-  for_each = local.user_provisioning_enabled ? local.combined_iam_db_users : {}
+  for_each = local.combined_iam_db_users
 
   name        = join("-", [local.prefix, "db", each.key])
   description = "Allows IAM authentication to the ${local.prefix} Aurora cluster as \"${each.key}\"."
@@ -16,7 +16,7 @@ resource "aws_iam_policy" "iam_db_user" {
 }
 
 resource "null_resource" "iam_db_user" {
-  for_each   = local.user_provisioning_enabled ? local.combined_iam_db_users : {}
+  for_each   = local.combined_iam_db_users
   depends_on = [module.database]
 
   # Only merged in for apps-sourced usernames — adding these keys for every
@@ -71,7 +71,7 @@ resource "null_resource" "iam_db_user" {
 # resources are not persisted to state, so the password is only held in
 # memory during the apply and never written to the state file.
 ephemeral "aws_secretsmanager_random_password" "db_user" {
-  for_each = local.user_provisioning_enabled ? var.db_users : {}
+  for_each = var.db_users
 
   password_length = 32
   # Exclude characters that would break SQL string literals or bash expansion.
@@ -79,7 +79,7 @@ ephemeral "aws_secretsmanager_random_password" "db_user" {
 }
 
 resource "aws_secretsmanager_secret" "db_user" {
-  for_each = local.user_provisioning_enabled ? var.db_users : {}
+  for_each = var.db_users
 
   kms_key_id = var.secrets_key_arn
   name = join("/", compact([
@@ -95,7 +95,7 @@ resource "aws_secretsmanager_secret" "db_user" {
 }
 
 resource "aws_secretsmanager_secret_version" "db_user" {
-  for_each = local.user_provisioning_enabled ? var.db_users : {}
+  for_each = var.db_users
 
   secret_id = aws_secretsmanager_secret.db_user[each.key].id
 
@@ -114,7 +114,7 @@ resource "aws_secretsmanager_secret_version" "db_user" {
 }
 
 resource "null_resource" "db_user" {
-  for_each   = local.user_provisioning_enabled ? var.db_users : {}
+  for_each   = var.db_users
   depends_on = [module.database, aws_secretsmanager_secret_version.db_user]
 
   triggers = {

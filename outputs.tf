@@ -45,6 +45,16 @@ output "iam_db_user_policy_arns" {
 }
 
 output "secret_arn" {
-  description = "ARN of the secret containing the user credentials. `null` when `is_primary_cluster` is `false`, since secondary Global Database members have no independent master-user secret."
-  value       = var.is_primary_cluster ? module.database.cluster_master_user_secret[0].secret_arn : null
+  description = "ARN of the secret containing the user credentials."
+  value       = module.database.cluster_master_user_secret[0].secret_arn
+}
+
+output "replica_cluster_endpoint" {
+  description = "Endpoint of the replica cluster, if created."
+  value       = var.replica_region != null ? module.database_replica[0].cluster_endpoint : null
+}
+
+output "global_cluster_id" {
+  description = "ID of the Aurora Global Database, if created."
+  value       = var.replica_region != null ? aws_rds_global_cluster.this[0].id : null
 }
