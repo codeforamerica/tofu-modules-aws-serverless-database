@@ -8,7 +8,7 @@ resource "aws_kms_key" "database" {
     region : data.aws_region.current.region,
   })))
 
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "aws_kms_alias" "database" {
@@ -17,7 +17,7 @@ resource "aws_kms_alias" "database" {
 }
 
 resource "aws_kms_key" "database_replica" {
-  count = var.replica_region != null ? 1 : 0
+  for_each = var.replica_region != null ? toset(["this"]) : toset([])
 
   provider                = aws.replica
   description             = "Database encryption key for ${var.project} ${var.environment} replica"
@@ -26,18 +26,18 @@ resource "aws_kms_key" "database_replica" {
   policy = jsonencode(yamldecode(templatefile("${path.module}/templates/key-policy.yaml.tftpl", {
     account_id : data.aws_caller_identity.identity.account_id,
     partition : data.aws_partition.current.partition,
-    region : data.aws_region.replica[0].region,
+    region : data.aws_region.replica["this"].region,
   })))
 
-  tags = var.tags
+  tags = local.replica_tags
 }
 
 resource "aws_kms_alias" "database_replica" {
-  count = var.replica_region != null ? 1 : 0
+  for_each = var.replica_region != null ? toset(["this"]) : toset([])
 
   provider      = aws.replica
   name          = "alias/${var.project}/${var.environment}/${var.service != "" ? "${var.service}/" : ""}database"
-  target_key_id = aws_kms_key.database_replica[0].id
+  target_key_id = aws_kms_key.database_replica["this"].id
 }
 
 resource "aws_kms_key" "backups" {

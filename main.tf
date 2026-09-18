@@ -68,5 +68,5 @@ module "database" {
   }
 
   cluster_tags = var.configure_aws_backup ? { "aws-backup/rds" = "daily" } : {}
-  tags         = var.tags
+  tags         = local.tags
 }

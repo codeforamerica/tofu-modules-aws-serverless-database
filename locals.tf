@@ -1,6 +1,12 @@
 locals {
   auto_backup_retention = coalesce(var.automatic_backup_retention_period, var.backup_retention_period)
 
+  # Marks this cluster's role in the Aurora Global Database topology, for
+  # the primary/replica resources specifically (not the unrelated backup
+  # replication resources in backups.tf).
+  tags         = merge(var.tags, { "multi-region" = var.replica_region != null ? "primary" : "disabled" })
+  replica_tags = merge(var.tags, { "multi-region" = "replica" })
+
   # Resolved once so the primary and replica clusters always end up on the
   # exact same engine version - each region can otherwise independently
   # resolve a different "latest", which Aurora Global Database rejects.

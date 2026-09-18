@@ -1,5 +1,5 @@
 resource "aws_rds_global_cluster" "this" {
-  count = var.replica_region != null ? 1 : 0
+  for_each = var.replica_region != null ? toset(["this"]) : toset([])
 
   # Promotes the existing primary cluster into a new global cluster rather
   # than setting global_cluster_identifier directly on it - the AWS API has
@@ -9,10 +9,14 @@ resource "aws_rds_global_cluster" "this" {
   global_cluster_identifier    = local.prefix
   source_db_cluster_identifier = module.database.cluster_arn
   force_destroy                = var.force_delete
+
+  tags = local.tags
 }
 
 module "database_replica" {
-  count = var.replica_region != null ? 1 : 0
+  for_each = var.replica_region != null ? toset(["this"]) : toset([])
+
+  depends_on = [module.database]
 
   source  = "terraform-aws-modules/rds-aurora/aws"
   version = "~> 9.8"
@@ -28,14 +32,14 @@ module "database_replica" {
   engine_version         = local.engine_version
   engine_mode            = "provisioned"
   storage_encrypted      = true
-  kms_key_id             = aws_kms_key.database_replica[0].arn
+  kms_key_id             = aws_kms_key.database_replica["this"].arn
   subnets                = var.replica_subnets
   copy_tags_to_snapshot  = true
   deletion_protection    = !var.force_delete
   enable_http_endpoint   = var.enable_data_api
 
   is_primary_cluster        = false
-  global_cluster_identifier = aws_rds_global_cluster.this[0].id
+  global_cluster_identifier = aws_rds_global_cluster.this["this"].id
   source_region             = data.aws_region.current.region
 
   create_db_cluster_parameter_group     = length(local.cluster_parameters) > 0
@@ -80,7 +84,5 @@ module "database_replica" {
     for i in range(coalesce(var.replica_instances, var.instances)) : (i + 1) => {}
   }
 
-  tags = var.tags
-
-  depends_on = [module.database]
+  tags = local.replica_tags
 }

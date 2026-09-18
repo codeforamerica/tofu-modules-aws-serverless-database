@@ -5,7 +5,7 @@ data "aws_partition" "current" {}
 data "aws_region" "current" {}
 
 data "aws_region" "replica" {
-  count    = var.replica_region != null ? 1 : 0
+  for_each = var.replica_region != null ? toset(["this"]) : toset([])
   provider = aws.replica
 }
 
