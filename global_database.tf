@@ -1,5 +1,5 @@
 resource "aws_rds_global_cluster" "this" {
-  for_each = var.replica_region != null ? toset(["this"]) : toset([])
+  for_each = var.replica.enabled ? toset(["this"]) : toset([])
 
   # Promotes the existing primary cluster into a new global cluster rather
   # than setting global_cluster_identifier directly on it - the AWS API has
@@ -14,7 +14,7 @@ resource "aws_rds_global_cluster" "this" {
 }
 
 module "database_replica" {
-  for_each = var.replica_region != null ? toset(["this"]) : toset([])
+  for_each = var.replica.enabled ? toset(["this"]) : toset([])
 
   depends_on = [module.database]
 
@@ -33,7 +33,7 @@ module "database_replica" {
   engine_mode            = "provisioned"
   storage_encrypted      = true
   kms_key_id             = aws_kms_key.database_replica["this"].arn
-  subnets                = var.replica_subnets
+  subnets                = var.replica.subnets
   copy_tags_to_snapshot  = true
   deletion_protection    = !var.force_delete
   enable_http_endpoint   = var.enable_data_api
@@ -53,12 +53,12 @@ module "database_replica" {
   iam_database_authentication_enabled = var.iam_authentication
   backup_retention_period             = local.auto_backup_retention
 
-  vpc_id               = var.replica_vpc_id
+  vpc_id               = var.replica.vpc_id
   security_group_rules = local.replica_security_group_rules
 
-  cloudwatch_log_group_kms_key_id        = var.replica_logging_key_arn
+  cloudwatch_log_group_kms_key_id        = var.replica.logging_key_arn
   cloudwatch_log_group_retention_in_days = 7
-  performance_insights_kms_key_id        = var.replica_logging_key_arn
+  performance_insights_kms_key_id        = var.replica.logging_key_arn
   performance_insights_enabled           = true
   performance_insights_retention_period  = 7
 
@@ -69,8 +69,8 @@ module "database_replica" {
   final_snapshot_identifier = "${local.prefix}-replica-final"
 
   serverlessv2_scaling_configuration = {
-    min_capacity = coalesce(var.replica_min_capacity, var.min_capacity)
-    max_capacity = coalesce(var.replica_max_capacity, var.max_capacity)
+    min_capacity = var.replica.min_capacity
+    max_capacity = var.replica.max_capacity
   }
 
   enabled_cloudwatch_logs_exports = [for l in flatten([
@@ -81,7 +81,7 @@ module "database_replica" {
 
   instance_class = "db.serverless"
   instances = {
-    for i in range(coalesce(var.replica_instances, var.instances)) : (i + 1) => {}
+    for i in range(var.replica.instances) : (i + 1) => {}
   }
 
   tags = local.replica_tags

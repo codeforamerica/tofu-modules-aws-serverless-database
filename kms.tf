@@ -17,7 +17,7 @@ resource "aws_kms_alias" "database" {
 }
 
 resource "aws_kms_key" "database_replica" {
-  for_each = var.replica_region != null ? toset(["this"]) : toset([])
+  for_each = var.replica.enabled ? toset(["this"]) : toset([])
 
   provider                = aws.replica
   description             = "Database encryption key for ${var.project} ${var.environment} replica"
@@ -33,7 +33,7 @@ resource "aws_kms_key" "database_replica" {
 }
 
 resource "aws_kms_alias" "database_replica" {
-  for_each = var.replica_region != null ? toset(["this"]) : toset([])
+  for_each = var.replica.enabled ? toset(["this"]) : toset([])
 
   provider      = aws.replica
   name          = "alias/${var.project}/${var.environment}/${var.service != "" ? "${var.service}/" : ""}database"

@@ -51,10 +51,10 @@ output "secret_arn" {
 
 output "replica_cluster_endpoint" {
   description = "Endpoint of the replica cluster, if created."
-  value       = var.replica_region != null ? module.database_replica["this"].cluster_endpoint : null
+  value       = var.replica.enabled ? module.database_replica["this"].cluster_endpoint : null
 }
 
 output "global_cluster_id" {
   description = "ID of the Aurora Global Database, if created."
-  value       = var.replica_region != null ? aws_rds_global_cluster.this["this"].id : null
+  value       = var.replica.enabled ? aws_rds_global_cluster.this["this"].id : null
 }
