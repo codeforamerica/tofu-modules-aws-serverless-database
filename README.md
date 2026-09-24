@@ -96,6 +96,7 @@ specifying short names for your project and (optionally) service using the
 | max_capacity                      | Maximum capacity for the serverless cluster in ACUs.                                                                                                                                                                                               | `number`       | `10`           | no       |
 | password_rotation_frequency       | Number of days between automatic password rotations for the root user Set to `0` to disable automatic rotation.                                                                                                                                    | `number`       | `30`           | no       |
 | project_short                     | Short name for the project. Used in resource names with character limits. Defaults to project.                                                                                                                                                     | `string`       | `""`           | no       |
+| [replica]                         | Configures a live, failover-ready read replica cluster in another region. If not set (or `enabled = false`), no replica is created.                                                                                                              | `object`       | `{}`           | no       |
 | service                           | Optional service that these resources are supporting. Example: `"api"`, `"web"`, `"worker"`. Used in resource names to differentiate from other services.                                                                                          | `string`       | `""`           | no       |
 | service_short                     | Short name for the service. Used in resource names with character limits. Defaults to the same value as `service`.                                                                                                                                 | `string`       | `""`           | no       |
 | [security_group_rules]            | Security group rules to control cluster ingress and egress.                                                                                                                                                                                        | `map(object)`  | `{}`           | no       |
@@ -517,6 +518,54 @@ security_group_rules = {
 | prefix_list_ids          | List of prefix list IDs to allow access.                                  | `list(string)` | `[]`                    | no       |
 | source_security_group_id | ID of another security group to allow access.                             | `string`       | `null`                  | no       |
 
+### replica
+
+Setting `replica.enabled = true` turns on a live, failover-ready read
+replica in another region, using [Aurora Global Database][aurora-global-database].
+One module call manages both clusters — no second instantiation, no
+second AWS provider. It just uses `rds-aurora`'s (`>= 10.0`) `region`
+argument to reach the other region directly:
+
+```hcl
+provider "aws" {
+  region = "us-east-1"
+}
+
+module "database" {
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.0"
+
+  project     = "my-project"
+  environment = "prod"
+
+  logging_key_arn = module.logging.kms_key_arn
+  secrets_key_arn = module.secrets.kms_key_arn
+  vpc_id          = module.vpc.vpc_id
+  subnets         = module.vpc.private_subnets
+  ingress_cidrs   = module.vpc.private_subnets_cidr_blocks
+
+  replica = {
+    enabled         = true
+    region          = "us-west-2"
+    logging_key_arn = module.replica_logging.kms_key_arn
+    vpc_id          = module.replica_vpc.vpc_id
+    subnets         = module.replica_vpc.private_subnets
+    ingress_cidrs   = module.replica_vpc.private_subnets_cidr_blocks
+  }
+}
+```
+
+> [!IMPORTANT]
+> - `replica.logging_key_arn` must be a key that exists in `replica.region`
+>   — KMS keys are regional. The replica has no master-user secret of its
+>   own (it's read-only), so there's no equivalent to `secrets_key_arn`.
+> - `iam_db_users`, `db_users`, and `apps` only ever provision on the
+>   primary — that data replicates to the replica automatically.
+> - `replica.min_capacity`/`max_capacity`/`instances` default to `2`/`10`/`2`
+>   independently of the primary's own sizing — set them explicitly in the
+>   `replica` object if you want the replica sized differently.
+> - Requires AWS provider `>= 6.61` — that's what `rds-aurora` `>= 10.0`
+>   needs for `region` to work.
+
 ## Outputs
 
 | Name                     | Description                                                                                               | Type          |
@@ -528,7 +577,9 @@ security_group_rules = {
 | cluster_id               | ID of the RDS database cluster.                                                                           | `string`      |
 | cluster_resource_id      | Resource ID of the RDS database cluster.                                                                  | `string`      |
 | db_user_secret_arns      | Map of database username to the ARN of the Secrets Manager secret containing their credentials.           | `map(string)` |
+| global_cluster_id        | ID of the Aurora Global Database, if `replica.enabled` is `true`.                                         | `string`      |
 | iam_db_user_policy_arns  | Map of IAM database username to the ARN of the IAM policy granting `rds-db:connect` access for that user. | `map(string)` |
+| replica_cluster_endpoint | DNS endpoint of the replica cluster, if `replica.enabled` is `true`.                                      | `string`      |
 | secret_arn               | ARN of the secret holding database credentials.                                                           | `string`      |
 
 [acus]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html#aurora-serverless-v2.how-it-works.capacity
@@ -545,6 +596,8 @@ security_group_rules = {
 [db_users]: #db_users
 [enforce_ssl]: #enforce_ssl
 [iam-auth]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html
+[aurora-global-database]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html
 [latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
 [parameter-groups]: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/parameter-groups-overview.html
+[replica]: #replica
 [security_group_rules]: #security_group_rules

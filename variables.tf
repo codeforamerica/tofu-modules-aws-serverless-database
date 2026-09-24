@@ -425,6 +425,7 @@ variable "instances" {
   description = "Number of instances to create in the database cluster."
   default     = 2
 }
+
 variable "key_recovery_period" {
   type        = number
   default     = 30
@@ -531,6 +532,62 @@ variable "snapshot_identifier" {
     applicable on create.
     EOT
   default     = ""
+}
+
+variable "replica" {
+  type = object({
+    enabled         = optional(bool, false)
+    region          = optional(string)
+    vpc_id          = optional(string)
+    subnets         = optional(list(string), [])
+    ingress_cidrs   = optional(list(string), [])
+    logging_key_arn = optional(string)
+    min_capacity    = optional(number, 2)
+    max_capacity    = optional(number, 10)
+    instances       = optional(number, 2)
+    security_group_rules = optional(map(object({
+      description              = optional(string, "Managed by OpenTofu")
+      type                     = optional(string, "ingress")
+      protocol                 = optional(string, "tcp")
+      from_port                = optional(number)
+      to_port                  = optional(number)
+      cidr_blocks              = optional(list(string), [])
+      ipv6_cidr_blocks         = optional(list(string), [])
+      prefix_list_ids          = optional(list(string), [])
+      source_security_group_id = optional(string, null)
+    })), {})
+  })
+  description = <<-EOT
+    Configures a live, failover-ready read replica cluster in another
+    region, using Aurora Global Database. No second AWS provider needed -
+    just set `region` to where the replica should live.
+    EOT
+  default     = {}
+
+  validation {
+    condition     = !var.replica.enabled || var.replica.region != null
+    error_message = "replica.region must be set when replica.enabled is true."
+  }
+
+  validation {
+    condition     = !var.replica.enabled || var.replica.region != data.aws_region.current.region
+    error_message = "replica.region must be different from the region the primary cluster is created in."
+  }
+
+  validation {
+    condition     = !var.replica.enabled || var.replica.vpc_id != null
+    error_message = "replica.vpc_id must be set when replica.enabled is true."
+  }
+
+  validation {
+    condition     = !var.replica.enabled || length(var.replica.subnets) > 0
+    error_message = "replica.subnets must be set when replica.enabled is true."
+  }
+
+  validation {
+    condition     = !var.replica.enabled || var.replica.logging_key_arn != null
+    error_message = "replica.logging_key_arn must be set when replica.enabled is true."
+  }
 }
 
 variable "subnets" {
