@@ -522,29 +522,17 @@ security_group_rules = {
 
 Setting `replica.enabled = true` turns on a live, failover-ready read
 replica in another region, using [Aurora Global Database][aurora-global-database].
-One module call manages both clusters — you don't instantiate this module
-twice.
-
-Because the replica lives in a different region, it needs its own VPC, its
-own KMS key for logging, and a second AWS provider aliased as
-`aws.replica`, passed into the module:
+One module call manages both clusters — no second instantiation, no
+second AWS provider. It just uses `rds-aurora`'s (`>= 10.0`) `region`
+argument to reach the other region directly:
 
 ```hcl
 provider "aws" {
   region = "us-east-1"
 }
 
-provider "aws" {
-  alias  = "replica"
-  region = "us-west-2"
-}
-
 module "database" {
   source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.0"
-  providers = {
-    aws         = aws
-    aws.replica = aws.replica
-  }
 
   project     = "my-project"
   environment = "prod"
@@ -567,10 +555,6 @@ module "database" {
 ```
 
 > [!IMPORTANT]
-> - Because of `configuration_aliases`, **every** consumer of this module
->   version must pass a `providers` block, even ones not using `replica` —
->   map `aws.replica` back to the default `aws` provider as a no-op:
->   `providers = { aws = aws, aws.replica = aws }`.
 > - `replica.logging_key_arn` must be a key that exists in `replica.region`
 >   — KMS keys are regional. The replica has no master-user secret of its
 >   own (it's read-only), so there's no equivalent to `secrets_key_arn`.
@@ -579,6 +563,8 @@ module "database" {
 > - `replica.min_capacity`/`max_capacity`/`instances` default to `2`/`10`/`2`
 >   independently of the primary's own sizing — set them explicitly in the
 >   `replica` object if you want the replica sized differently.
+> - Requires AWS provider `>= 6.61` — that's what `rds-aurora` `>= 10.0`
+>   needs for `region` to work.
 
 ## Outputs
 

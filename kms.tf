@@ -19,14 +19,14 @@ resource "aws_kms_alias" "database" {
 resource "aws_kms_key" "database_replica" {
   for_each = var.replica.enabled ? toset(["this"]) : toset([])
 
-  provider                = aws.replica
+  region                  = var.replica.region
   description             = "Database encryption key for ${var.project} ${var.environment} replica"
   deletion_window_in_days = var.key_recovery_period
   enable_key_rotation     = true
   policy = jsonencode(yamldecode(templatefile("${path.module}/templates/key-policy.yaml.tftpl", {
     account_id : data.aws_caller_identity.identity.account_id,
     partition : data.aws_partition.current.partition,
-    region : data.aws_region.replica["this"].region,
+    region : var.replica.region,
   })))
 
   tags = local.replica_tags
@@ -35,7 +35,7 @@ resource "aws_kms_key" "database_replica" {
 resource "aws_kms_alias" "database_replica" {
   for_each = var.replica.enabled ? toset(["this"]) : toset([])
 
-  provider      = aws.replica
+  region        = var.replica.region
   name          = "alias/${var.project}/${var.environment}/${var.service != "" ? "${var.service}/" : ""}database"
   target_key_id = aws_kms_key.database_replica["this"].id
 }

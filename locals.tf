@@ -1,15 +1,14 @@
 locals {
   auto_backup_retention = coalesce(var.automatic_backup_retention_period, var.backup_retention_period)
 
-  # Marks this cluster's role in the Aurora Global Database topology, for
-  # the primary/replica resources specifically (not the unrelated backup
-  # replication resources in backups.tf).
+  # Marks primary/replica/disabled - not related to the backup-replication
+  # stuff in backups.tf.
   tags         = merge(var.tags, { "multi-region" = var.replica.enabled ? "primary" : "disabled" })
   replica_tags = merge(var.tags, { "multi-region" = "replica" })
 
-  # Resolved once so the primary and replica clusters always end up on the
-  # exact same engine version - each region can otherwise independently
-  # resolve a different "latest", which Aurora Global Database rejects.
+  # Resolved once so primary and replica land on the same engine version -
+  # left to each region, "latest" can resolve differently, which Global
+  # Database rejects.
   engine_version = coalesce(var.engine_version, data.aws_rds_engine_version.this.version)
 
   # Enforce SSL/TLS by default, using the parameter appropriate to the
@@ -37,16 +36,21 @@ locals {
   service_short = var.service_short != "" ? var.service_short : var.service
   short_prefix  = "${local.project_short}-${var.environment}${var.service != "" ? "-${local.service_short}" : ""}"
 
-  # Merge any ingress CIDR blocks with the security group rules.
+  # Merge any ingress CIDR blocks with the security group rules. Every
+  # entry needs the same attributes, or merge() silently drops the ones
+  # that don't match.
   security_group_rules = merge(
     length(var.ingress_cidrs) == 0 ? {} : {
       ingress_cidrs = {
-        description = "Allow ingress from specified CIDR blocks."
-        type        = "ingress"
-        protocol    = "tcp"
-        from_port   = local.port
-        to_port     = local.port
-        cidr_blocks = var.ingress_cidrs
+        description              = "Allow ingress from specified CIDR blocks."
+        type                     = "ingress"
+        protocol                 = "tcp"
+        from_port                = local.port
+        to_port                  = local.port
+        cidr_blocks              = var.ingress_cidrs
+        ipv6_cidr_blocks         = []
+        prefix_list_ids          = []
+        source_security_group_id = null
       }
     },
     {
@@ -69,12 +73,15 @@ locals {
   replica_security_group_rules = merge(
     length(var.replica.ingress_cidrs) == 0 ? {} : {
       ingress_cidrs = {
-        description = "Allow ingress from specified CIDR blocks."
-        type        = "ingress"
-        protocol    = "tcp"
-        from_port   = local.port
-        to_port     = local.port
-        cidr_blocks = var.replica.ingress_cidrs
+        description              = "Allow ingress from specified CIDR blocks."
+        type                     = "ingress"
+        protocol                 = "tcp"
+        from_port                = local.port
+        to_port                  = local.port
+        cidr_blocks              = var.replica.ingress_cidrs
+        ipv6_cidr_blocks         = []
+        prefix_list_ids          = []
+        source_security_group_id = null
       }
     },
     {
@@ -91,4 +98,5 @@ locals {
       }
     }
   )
+
 }

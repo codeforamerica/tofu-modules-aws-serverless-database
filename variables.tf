@@ -559,9 +559,8 @@ variable "replica" {
   })
   description = <<-EOT
     Configures a live, failover-ready read replica cluster in another
-    region, using Aurora Global Database. Setting `enabled = true` requires
-    passing a second AWS provider into the module, aliased as
-    `aws.replica`, configured for `region`.
+    region, using Aurora Global Database. No second AWS provider needed -
+    just set `region` to where the replica should live.
     EOT
   default     = {}
 
