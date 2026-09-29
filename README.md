@@ -566,6 +566,19 @@ module "database" {
 > - Requires AWS provider `>= 6.61` — that's what `rds-aurora` `>= 10.0`
 >   needs for `region` to work.
 
+| Name                    | Description                                                                                              | Type           | Default | Required |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | ------- | -------- |
+| enabled                 | Whether to create the replica cluster.                                                                    | `bool`         | `false` | no       |
+| region                  | Region to create the replica cluster in. Required when `enabled` is `true`.                               | `string`       | `null`  | no       |
+| vpc_id                  | Id of the VPC to launch the replica cluster into. Required when `enabled` is `true`.                      | `string`       | `null`  | no       |
+| subnets                 | List of subnet ids the replica cluster's instances may be placed in. Required when `enabled` is `true`.   | `list(string)` | `[]`    | no       |
+| ingress_cidrs           | List of CIDR blocks to allow ingress on the replica cluster.                                               | `list(string)` | `[]`    | no       |
+| logging_key_arn         | ARN of the KMS key for the replica cluster's logging. Must be a key in `region`. Required when `enabled`. | `string`       | `null`  | no       |
+| min_capacity            | Minimum capacity for the replica cluster in ACUs.                                                          | `number`       | `2`     | no       |
+| max_capacity            | Maximum capacity for the replica cluster in ACUs.                                                          | `number`       | `10`    | no       |
+| instances               | Number of instances to create in the replica cluster.                                                      | `number`       | `2`     | no       |
+| [security_group_rules]  | Security group rules for the replica cluster. Same shape as the top-level `security_group_rules`.          | `map(object)`  | `{}`    | no       |
+
 ## Outputs
 
 | Name                     | Description                                                                                               | Type          |
