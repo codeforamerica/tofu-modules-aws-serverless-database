@@ -12,7 +12,7 @@ resource "aws_iam_policy" "iam_db_user" {
     username : each.key,
   })))
 
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "null_resource" "iam_db_user" {
@@ -91,7 +91,7 @@ resource "aws_secretsmanager_secret" "db_user" {
     each.key,
   ]))
 
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "aws_secretsmanager_secret_version" "db_user" {
