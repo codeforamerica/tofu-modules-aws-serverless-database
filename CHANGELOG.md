@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.12.0 (2026-09-30)
+
+### Feat
+
+- Add Aurora Global Database support (SOC-2705) (#48)
+
 ## 1.11.0 (2026-09-09)
 
 ### Feat
