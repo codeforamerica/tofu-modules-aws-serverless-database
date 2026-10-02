@@ -532,7 +532,7 @@ provider "aws" {
 }
 
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.0"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.12.0"
 
   project     = "my-project"
   environment = "prod"
