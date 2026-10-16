@@ -116,7 +116,6 @@ elif [ "$ENGINE" = "postgresql" ]; then
 
   run_sql "postgres" \
     "DO \$\$BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$USERNAME') THEN CREATE USER \"$USERNAME\"; END IF; END\$\$;"
-  run_sql "postgres" "GRANT rds_iam TO \"$USERNAME\";"
 
   # Owned databases get CREATE via ownership; shared ones are owned by
   # root and get an explicit grant below instead (see README).
@@ -169,10 +168,12 @@ elif [ "$ENGINE" = "postgresql" ]; then
       fi
     done
 
-    # Done with ownership -- don't leave root a member of this role, or root
-    # inherits its rds_iam grant and locks itself out of the Data API for good.
+    # Done with ownership -- don't leave root a member of this role.
     run_sql "postgres" "REVOKE \"$USERNAME\" FROM root;"
   fi
+
+  # Grant rds_iam only after root's temporary membership above is gone, so root never inherits it.
+  run_sql "postgres" "GRANT rds_iam TO \"$USERNAME\";"
 
   # Get a list of all existing databases.
   dblist=$(
