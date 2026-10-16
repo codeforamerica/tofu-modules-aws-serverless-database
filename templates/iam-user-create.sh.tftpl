@@ -69,11 +69,18 @@ run_sql() {
   fi
 }
 
-# Wait for the Data API to become reachable (up to 3 minutes).
+# Wait for the Data API to become reachable (up to 3 minutes), but don't retry on errors that waiting won't fix.
 PING_DB="$( [ "$ENGINE" = "mysql" ] && echo "mysql" || echo "postgres" )"
 for attempt in $(seq 1 18); do
-  run_sql "$PING_DB" "SELECT 1" > /dev/null 2>&1 && break
-  echo "Data API not yet available, retrying in 10s (attempt $attempt/18)..."
+  if ping_output=$(run_sql "$PING_DB" "SELECT 1" 2>&1); then
+    unset ping_output
+    break
+  fi
+  if ! grep -q "DatabaseResumingException" <<< "$ping_output"; then
+    echo "$ping_output"
+    exit 1
+  fi
+  echo "Cluster is resuming from auto-pause, retrying in 10s (attempt $attempt/18)..."
   sleep 10
 done
 
