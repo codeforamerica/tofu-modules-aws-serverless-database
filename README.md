@@ -217,6 +217,18 @@ next apply.
 > failed recreate leaves that one role without `rds_iam` until the next
 > apply — self-heals on retry, and beats the master user getting stuck.
 
+> [!WARNING]
+> Upgrading from an older version doesn't clean up anything the master user
+> was already stuck holding — it only stops that from happening again. Check:
+>
+> ```sql
+> SELECT rolname FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid
+> WHERE m.member = 'root'::regrole;
+> ```
+>
+> Revoke anything that isn't a built-in role like `rds_superuser`:
+> `REVOKE "<role>" FROM root;`
+
 ### backup_schedules
 
 You can enable backups using [AWS Backup][aws-backup] by setting
