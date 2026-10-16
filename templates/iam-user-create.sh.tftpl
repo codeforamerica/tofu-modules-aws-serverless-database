@@ -164,6 +164,10 @@ elif [ "$ENGINE" = "postgresql" ]; then
         fi
       fi
     done
+
+    # Done with ownership -- don't leave root a member of this role, or root
+    # inherits its rds_iam grant and locks itself out of the Data API for good.
+    run_sql "postgres" "REVOKE \"$USERNAME\" FROM root;"
   fi
 
   # Get a list of all existing databases.
