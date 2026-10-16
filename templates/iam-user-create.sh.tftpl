@@ -120,6 +120,9 @@ elif [ "$ENGINE" = "postgresql" ]; then
   # Owned databases get CREATE via ownership; shared ones are owned by
   # root and get an explicit grant below instead (see README).
   if [ "$MANAGE_DATABASES" = "true" ]; then
+    # Strip rds_iam first in case this role already has it from a prior run -- no-op if it doesn't.
+    run_sql "postgres" "REVOKE rds_iam FROM \"$USERNAME\";"
+
     # root needs role membership to set ownership (no SET ROLE involved). Trap
     # covers any early exit below so root never gets stuck holding this grant.
     run_sql "postgres" "GRANT \"$USERNAME\" TO root;"
