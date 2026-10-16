@@ -43,30 +43,34 @@ run_sql() {
   local sql="$2"
   local output_response="$${3:-false}"
 
-  # Capture output and error
+  # Retry on Postgres's transient "tuple concurrently updated" -- sibling apps race on the same shared databases.
   local output
-  if ! output=$(
-    aws rds-data execute-statement \
-      --region        "$REGION" \
-      --resource-arn  "$CLUSTER_ARN" \
-      --secret-arn    "$SECRET_ARN" \
-      --database      "$database" \
-      --sql           "$sql" \
-      --output        json 2>&1
-  ); then
-    echo "Error running SQL against database \"$database\":"
-    echo "$sql"
-    echo "AWS CLI output:"
-    echo "$output"
-    return 1
-  fi
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if output=$(
+      aws rds-data execute-statement \
+        --region        "$REGION" \
+        --resource-arn  "$CLUSTER_ARN" \
+        --secret-arn    "$SECRET_ARN" \
+        --database      "$database" \
+        --sql           "$sql" \
+        --output        json 2>&1
+    ); then
+      # On success, print the JSON output only if output_response is true. This
+      # allows callers to capture the output if needed, but we don't want to print
+      # it by default.
+      [ "$output_response" = true ] && echo "$output"
+      return 0
+    fi
+    grep -q "tuple concurrently updated" <<< "$output" || break
+    sleep "$attempt"
+  done
 
-  # On success, print the JSON output only if output_response is true. This
-  # allows callers to capture the output if needed, but we don't want to print
-  # it by default.
-  if [ "$output_response" = true ]; then
-    echo "$output"
-  fi
+  echo "Error running SQL against database \"$database\":"
+  echo "$sql"
+  echo "AWS CLI output:"
+  echo "$output"
+  return 1
 }
 
 # Wait for the Data API to become reachable (up to 3 minutes), but don't retry on errors that waiting won't fix.
