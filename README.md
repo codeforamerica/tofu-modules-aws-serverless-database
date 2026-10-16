@@ -211,6 +211,12 @@ next apply.
 > membership in whatever role currently owns it — otherwise the apply fails
 > partway through.
 
+> [!NOTE]
+> If a role is recreated and already had `rds_iam`, we strip it before the
+> master user borrows temporary membership, then grant it back after. A
+> failed recreate leaves that one role without `rds_iam` until the next
+> apply — self-heals on retry, and beats the master user getting stuck.
+
 ### backup_schedules
 
 You can enable backups using [AWS Backup][aws-backup] by setting
