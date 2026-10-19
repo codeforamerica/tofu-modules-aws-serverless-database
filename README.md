@@ -377,9 +377,9 @@ section for the details.
 
 ### enable_pgaudit
 
-Turns on pgaudit logging by setting `shared_preload_libraries` to include
-`pgaudit` and `pgaudit.log` to `"ddl,write"` in the cluster parameter group.
-PostgreSQL only.
+Turns on pgaudit logging by setting `shared_preload_libraries` to
+`"pg_stat_statements,pgaudit"` (keeping Performance Insights working) and
+`pgaudit.log` to `"ddl,write"` in the cluster parameter group. PostgreSQL only.
 
 ```hcl
 enable_pgaudit = true

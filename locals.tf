@@ -31,7 +31,7 @@ locals {
     var.enable_pgaudit ? {
       shared_preload_libraries = {
         name         = "shared_preload_libraries"
-        value        = "pgaudit"
+        value        = "pg_stat_statements,pgaudit"
         apply_method = "pending-reboot"
       }
       "pgaudit.log" = {
