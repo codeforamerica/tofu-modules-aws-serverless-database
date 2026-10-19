@@ -14,17 +14,30 @@ locals {
   # Enforce SSL/TLS by default, using the parameter appropriate to the
   # engine. A parameter already present in var.cluster_parameters takes
   # precedence, so users can still override the value or apply_method.
+  # enable_pgaudit forces this on too - no point auditing unencrypted traffic.
   #
   # rds.force_ssl (PostgreSQL) is a static parameter and only accepts
   # apply_method = "pending-reboot"; require_secure_transport (MySQL) is
   # dynamic and can apply immediately.
   ssl_parameter_name = var.engine == "postgresql" ? "rds.force_ssl" : "require_secure_transport"
   cluster_parameters = values(merge(
-    var.enforce_ssl ? {
+    var.enforce_ssl || var.enable_pgaudit ? {
       (local.ssl_parameter_name) = {
         name         = local.ssl_parameter_name
         value        = "1"
         apply_method = var.engine == "postgresql" ? "pending-reboot" : "immediate"
+      }
+    } : {},
+    var.enable_pgaudit ? {
+      shared_preload_libraries = {
+        name         = "shared_preload_libraries"
+        value        = "pgaudit"
+        apply_method = "pending-reboot"
+      }
+      "pgaudit.log" = {
+        name         = "pgaudit.log"
+        value        = "ddl,write"
+        apply_method = "immediate"
       }
     } : {},
     { for p in var.cluster_parameters : p.name => p }
