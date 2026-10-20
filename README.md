@@ -83,6 +83,7 @@ specifying short names for your project and (optionally) service using the
 | configure_aws_backup              | Whether to configure AWS Backup with the defined backup schedules.                                                                                                                                                                                 | `bool`         | `false`        | no       |
 | [db_users]                        | Map of database users to create on the cluster. The map key becomes the database username. Requires `enable_data_api = true` and the AWS CLI must be installed on the OpenTofu runner.                                                             | `map(object)`  | `{}`           | no       |
 | enable_data_api                   | Whether to enable the [Data API][data-api] for the database cluster.                                                                                                                                                                               | `bool`         | `false`        | no       |
+| [enable_pgaudit]                  | Whether to audit database activity via the pgaudit extension. PostgreSQL only.                                                                                                                                                                     | `bool`         | `false`        | no       |
 | [enforce_ssl]                     | Whether to require SSL/TLS for all connections to the database cluster.                                                                                                                                                                            | `bool`         | `true`         | no       |
 | engine                            | Database engine to use for the cluster. Valid values are `"mysql"` and `"postgresql"`.                                                                                                                                                             | `string`       | `"postgresql"` | no       |
 | engine_version                    | Version of the database engine to use. If left empty, the latest version will be used. Changing this value will result in downtime.                                                                                                                | `string`       | `null`         | no       |
@@ -373,6 +374,9 @@ enforce_ssl = false
 This is implemented as a `cluster_parameters` entry under the hood, so an
 entry you set explicitly for `rds.force_ssl` or `require_secure_transport` in
 [`cluster_parameters`][cluster_parameters] takes precedence over `enforce_ssl`.
+[`enable_pgaudit`][enable_pgaudit] forces this on regardless of `enforce_ssl`,
+and an `rds.force_ssl` override won't quietly undo it either - see that
+section for the details.
 
 > [!WARNING]
 > Because `enforce_ssl` defaults to `true`, applying this module version
@@ -388,6 +392,41 @@ entry you set explicitly for `rds.force_ssl` or `require_secure_transport` in
 > `pending-reboot`, even on a cluster already using a custom parameter group.
 > `"mysql"`'s `require_secure_transport` is dynamic and applies immediately
 > with no reboot once the cluster is already on a custom parameter group.
+
+### enable_pgaudit
+
+Turns on pgaudit logging by setting `shared_preload_libraries` to
+`"pg_stat_statements,pgaudit"` (keeping Performance Insights working) and
+`pgaudit.log` to `"ddl,write"` in the cluster parameter group. PostgreSQL only.
+
+```hcl
+enable_pgaudit = true
+```
+
+Like `enforce_ssl`, this is just a `cluster_parameters` entry under the hood.
+If you're also setting `shared_preload_libraries` or `rds.force_ssl` yourself,
+keep `pgaudit`/`"1"` in the value and `apply_method = "pending-reboot"`, or
+the plan will fail:
+
+```hcl
+enable_pgaudit = true
+cluster_parameters = [
+  { name = "shared_preload_libraries", value = "pg_stat_statements,pgaudit", apply_method = "pending-reboot" }
+]
+```
+
+> [!NOTE]
+> This also forces `enforce_ssl` on - same reboot either way, so it's free.
+> Overriding `rds.force_ssl` to anything but `"1"` (or with the wrong `apply_method`) alongside it will fail the plan instead of quietly turning SSL back off.
+
+> [!WARNING]
+> `shared_preload_libraries` is static, so you'll need a manual failover or reboot before pgaudit actually loads.
+
+> [!NOTE]
+> If you override `pgaudit.log` yourself, it still has to select something - `"none"` or an all-negation value like `"-misc"` will fail the plan too.
+
+> [!NOTE]
+> You still need to run `CREATE EXTENSION pgaudit;` on each database you want audited.
 
 ### db_users
 
@@ -625,6 +664,7 @@ module "database" {
 [cluster_parameters]: #cluster_parameters
 [data-api]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html
 [db_users]: #db_users
+[enable_pgaudit]: #enable_pgaudit
 [enforce_ssl]: #enforce_ssl
 [iam-auth]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html
 [aurora-global-database]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html

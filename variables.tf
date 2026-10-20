@@ -281,6 +281,50 @@ variable "enable_data_api" {
   default     = false
 }
 
+variable "enable_pgaudit" {
+  type        = bool
+  description = "Whether to audit database activity via the pgaudit extension. PostgreSQL only."
+  default     = false
+
+  validation {
+    condition     = var.engine == "postgresql" || !var.enable_pgaudit
+    error_message = "enable_pgaudit is only supported with engine = \"postgresql\"."
+  }
+
+  # Stops an explicit shared_preload_libraries override from quietly dropping pgaudit.
+  validation {
+    condition = !var.enable_pgaudit || alltrue([
+      for p in var.cluster_parameters :
+      p.name != "shared_preload_libraries" || (
+        contains([for v in split(",", p.value) : trimspace(v)], "pgaudit") &&
+        p.apply_method == "pending-reboot"
+      )
+    ])
+    error_message = "enable_pgaudit needs \"pgaudit\" in your shared_preload_libraries override with apply_method = \"pending-reboot\", or it'll get clobbered."
+  }
+
+  # Same idea for SSL - don't let an explicit override quietly turn it back off.
+  validation {
+    condition = !var.enable_pgaudit || alltrue([
+      for p in var.cluster_parameters :
+      p.name != "rds.force_ssl" || (trimspace(p.value) == "1" && p.apply_method == "pending-reboot")
+    ])
+    error_message = "enable_pgaudit needs your rds.force_ssl override set to \"1\" with apply_method = \"pending-reboot\", or it'll silently undo SSL enforcement."
+  }
+
+  # pgaudit.log must still select something, or the audit control is a no-op.
+  validation {
+    condition = !var.enable_pgaudit || alltrue([
+      for p in var.cluster_parameters :
+      p.name != "pgaudit.log" || (
+        trimspace(p.value) != "none" &&
+        anytrue([for v in split(",", p.value) : !startswith(trimspace(v), "-") && trimspace(v) != ""])
+      )
+    ])
+    error_message = "enable_pgaudit needs your pgaudit.log override to actually select a statement class - \"none\" or an all-negation value won't satisfy the audit requirement."
+  }
+}
+
 variable "enforce_ssl" {
   type        = bool
   description = <<-EOT
