@@ -212,14 +212,14 @@ next apply.
 > partway through.
 
 > [!NOTE]
-> If a role is recreated and already had `rds_iam`, we strip it before the
-> master user borrows temporary membership, then grant it back after. A
-> failed recreate leaves that one role without `rds_iam` until the next
-> apply — self-heals on retry, and beats the master user getting stuck.
+> If a role is recreated and already had `rds_iam`, we strip it before
+> root borrows temporary membership, then grant it back after. A failed
+> recreate leaves that one role without `rds_iam` until the next apply —
+> self-heals on retry, and beats root getting stuck.
 
 > [!WARNING]
-> Upgrading from an older version doesn't clean up anything the master user
-> was already stuck holding — it only stops that from happening again. Check:
+> Upgrading from an older version doesn't clean up anything root was already
+> stuck holding — it only stops that from happening again. Check:
 >
 > ```sql
 > SELECT rolname FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid
