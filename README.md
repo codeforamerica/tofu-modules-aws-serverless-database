@@ -217,6 +217,24 @@ next apply.
 > membership in whatever role currently owns it — otherwise the apply fails
 > partway through.
 
+> [!NOTE]
+> If a role is recreated and already had `rds_iam`, we strip it before
+> root borrows temporary membership, then grant it back after. A failed
+> recreate leaves that one role without `rds_iam` until the next apply —
+> self-heals on retry, and beats root getting stuck.
+
+> [!WARNING]
+> Upgrading from an older version doesn't clean up anything root was already
+> stuck holding — it only stops that from happening again. Check:
+>
+> ```sql
+> SELECT rolname FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid
+> WHERE m.member = 'root'::regrole;
+> ```
+>
+> Revoke anything that isn't a built-in role like `rds_superuser`:
+> `REVOKE "<role>" FROM root;`
+
 ### backup_schedules
 
 You can enable backups using [AWS Backup][aws-backup] by setting

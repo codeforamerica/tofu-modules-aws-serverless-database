@@ -43,37 +43,53 @@ run_sql() {
   local sql="$2"
   local output_response="$${3:-false}"
 
-  # Capture output and error
+  # Retry on Postgres's transient "tuple concurrently updated" — sibling
+  # apps race on the same shared databases.
   local output
-  if ! output=$(
-    aws rds-data execute-statement \
-      --region        "$REGION" \
-      --resource-arn  "$CLUSTER_ARN" \
-      --secret-arn    "$SECRET_ARN" \
-      --database      "$database" \
-      --sql           "$sql" \
-      --output        json 2>&1
-  ); then
-    echo "Error running SQL against database \"$database\":"
-    echo "$sql"
-    echo "AWS CLI output:"
-    echo "$output"
-    return 1
-  fi
+  local attempt
+  for attempt in {1..5}; do
+    if output=$(
+      aws rds-data execute-statement \
+        --region        "$REGION" \
+        --resource-arn  "$CLUSTER_ARN" \
+        --secret-arn    "$SECRET_ARN" \
+        --database      "$database" \
+        --sql           "$sql" \
+        --output        json 2>&1
+    ); then
+      # On success, print the JSON output only if output_response is true. This
+      # allows callers to capture the output if needed, but we don't want to print
+      # it by default.
+      [ "$output_response" = true ] && echo "$output"
+      return 0
+    fi
 
-  # On success, print the JSON output only if output_response is true. This
-  # allows callers to capture the output if needed, but we don't want to print
-  # it by default.
-  if [ "$output_response" = true ]; then
-    echo "$output"
-  fi
+    grep -q "tuple concurrently updated" <<< "$output" || break
+    sleep "$attempt"
+  done
+
+  echo "Error running SQL against database \"$database\":"
+  echo "$sql"
+  echo "AWS CLI output:"
+  echo "$output"
+  return 1
 }
 
-# Wait for the Data API to become reachable (up to 3 minutes).
+# Wait for the Data API to become reachable (up to 3 minutes), but don't
+# retry on errors that waiting won't fix.
 PING_DB="$( [ "$ENGINE" = "mysql" ] && echo "mysql" || echo "postgres" )"
 for attempt in $(seq 1 18); do
-  run_sql "$PING_DB" "SELECT 1" > /dev/null 2>&1 && break
-  echo "Data API not yet available, retrying in 10s (attempt $attempt/18)..."
+  if ping_output=$(run_sql "$PING_DB" "SELECT 1" 2>&1); then
+    unset ping_output
+    break
+  fi
+
+  if ! grep -q "DatabaseResumingException" <<< "$ping_output"; then
+    echo "$ping_output"
+    exit 1
+  fi
+
+  echo "Cluster is resuming from auto-pause, retrying in 10s (attempt $attempt/18)..."
   sleep 10
 done
 
@@ -105,13 +121,18 @@ elif [ "$ENGINE" = "postgresql" ]; then
 
   run_sql "postgres" \
     "DO \$\$BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$USERNAME') THEN CREATE USER \"$USERNAME\"; END IF; END\$\$;"
-  run_sql "postgres" "GRANT rds_iam TO \"$USERNAME\";"
 
   # Owned databases get CREATE via ownership; shared ones are owned by
   # root and get an explicit grant below instead (see README).
   if [ "$MANAGE_DATABASES" = "true" ]; then
-    # root needs role membership to set ownership (no SET ROLE involved).
+    # Strip rds_iam first in case this role already has it from a prior
+    # run — no-op if it doesn't.
+    run_sql "postgres" "REVOKE rds_iam FROM \"$USERNAME\";"
+
+    # root needs role membership to set ownership (no SET ROLE involved). Trap
+    # covers any early exit below so root never gets stuck holding this grant.
     run_sql "postgres" "GRANT \"$USERNAME\" TO root;"
+    trap 'run_sql "postgres" "REVOKE \"$USERNAME\" FROM root;" || true' EXIT
 
     IFS=',' read -ra OWNED_DBS <<< "$OWNED_DATABASES_CSV"
     IFS=',' read -ra ALL_DBS <<< "$DATABASES_CSV"
@@ -157,7 +178,16 @@ elif [ "$ENGINE" = "postgresql" ]; then
         fi
       fi
     done
+
+    # Done with ownership — revoke now and clear the trap so it doesn't
+    # fire twice.
+    run_sql "postgres" "REVOKE \"$USERNAME\" FROM root;"
+    trap - EXIT
   fi
+
+  # Grant rds_iam only after root's temporary membership above is gone, so
+  # root never inherits it.
+  run_sql "postgres" "GRANT rds_iam TO \"$USERNAME\";"
 
   # Get a list of all existing databases.
   dblist=$(
