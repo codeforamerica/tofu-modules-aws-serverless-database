@@ -49,6 +49,13 @@ locals {
   service_short = var.service_short != "" ? var.service_short : var.service
   short_prefix  = "${local.project_short}-${var.environment}${var.service != "" ? "-${local.service_short}" : ""}"
 
+  # Resource configuration names are limited to 40 lowercase characters.
+  lattice_name  = lower(local.short_prefix)
+  lattice_share = var.lattice_share != null ? { this = var.lattice_share } : {}
+  lattice_principals = var.lattice_share != null ? {
+    for i, principal in var.lattice_share.principals : tostring(i) => principal
+  } : {}
+
   # Merge any ingress CIDR blocks with the security group rules. Every
   # entry needs the same attributes, or merge() silently drops the ones
   # that don't match.
@@ -64,6 +71,21 @@ locals {
         ipv6_cidr_blocks         = []
         prefix_list_ids          = []
         source_security_group_id = null
+      }
+    },
+    # If the security group ID for a VPC Lattice resource gateway is specified,
+    # add a rule for it.
+    var.lattice_share == null ? {} : {
+      lattice_share = {
+        description              = "Allow ingress from the VPC Lattice resource gateway."
+        type                     = "ingress"
+        protocol                 = "tcp"
+        from_port                = local.port
+        to_port                  = local.port
+        cidr_blocks              = []
+        ipv6_cidr_blocks         = []
+        prefix_list_ids          = []
+        source_security_group_id = var.lattice_share.security_group_id
       }
     },
     {
