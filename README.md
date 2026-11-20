@@ -14,7 +14,7 @@ to match your desired configuration. For example:
 
 ```hcl
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.1"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.14.0"
 
   project     = "my-project"
   environment = "dev"
@@ -244,7 +244,7 @@ vault in the current region.
 
 ```hcl
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.1"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.14.0"
 
   project     = "my-project"
   environment = "dev"
@@ -591,7 +591,7 @@ principals.
 
 ```hcl
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.1"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.14.0"
 
   # ...
 
@@ -630,7 +630,7 @@ provider "aws" {
 }
 
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.1"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.14.0"
 
   project     = "my-project"
   environment = "prod"
