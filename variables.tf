@@ -374,6 +374,31 @@ variable "force_delete" {
   default     = false
 }
 
+variable "lattice_share" {
+  type = object({
+    principals                = list(string)
+    resource_gateway_id       = string
+    security_group_id         = string
+    allow_external_principals = optional(bool, false)
+  })
+  description = <<-EOT
+    Configures an ARN-type resource share through VPC Lattice, using AWS
+    Resource Access Manager (RAM) to share with the specified principals.
+    Disabled when `null`.
+    EOT
+  default     = null
+
+  validation {
+    condition     = var.lattice_share == null || can(regex("^rgw-[0-9a-f]+$", var.lattice_share.resource_gateway_id))
+    error_message = "lattice_share.resource_gateway_id must be a resource gateway ID (rgw-...)."
+  }
+
+  validation {
+    condition     = var.lattice_share == null || length(var.lattice_share.principals) > 0
+    error_message = "lattice_share.principals must contain at least one principal."
+  }
+}
+
 variable "logging_key_arn" {
   type        = string
   description = "ARN of the KMS key for logging."

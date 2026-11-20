@@ -14,7 +14,7 @@ to match your desired configuration. For example:
 
 ```hcl
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.7.0"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.1"
 
   project     = "my-project"
   environment = "dev"
@@ -93,11 +93,12 @@ specifying short names for your project and (optionally) service using the
 | [iam_db_users]                    | Map of IAM database users to create on the cluster. The map key becomes the database username. Requires `iam_authentication = true` and the AWS CLI must be installed on the OpenTofu runner.                                                      | `map(object)`  | `{}`           | no       |
 | instances                         | Number of instances to create in the database cluster.                                                                                                                                                                                             | `number`       | `2`            | no       |
 | key_recovery_period               | Recovery period for deleted KMS keys in days. Must be between `7` and `30`.                                                                                                                                                                        | `number`       | `30`           | no       |
+| [lattice_share]                   | Shares the cluster with other accounts through VPC Lattice and AWS RAM.                                                                                                                                                                            | `object`       | `null`         | no       |
 | min_capacity                      | Minimum capacity for the serverless cluster in ACUs.                                                                                                                                                                                               | `number`       | `2`            | no       |
 | max_capacity                      | Maximum capacity for the serverless cluster in ACUs.                                                                                                                                                                                               | `number`       | `10`           | no       |
 | password_rotation_frequency       | Number of days between automatic password rotations for the root user Set to `0` to disable automatic rotation.                                                                                                                                    | `number`       | `30`           | no       |
 | project_short                     | Short name for the project. Used in resource names with character limits. Defaults to project.                                                                                                                                                     | `string`       | `""`           | no       |
-| [replica]                         | Configures a live, failover-ready read replica cluster in another region. If not set (or `enabled = false`), no replica is created.                                                                                                              | `object`       | `{}`           | no       |
+| [replica]                         | Configures a live, failover-ready read replica cluster in another region. If not set (or `enabled = false`), no replica is created.                                                                                                                | `object`       | `{}`           | no       |
 | service                           | Optional service that these resources are supporting. Example: `"api"`, `"web"`, `"worker"`. Used in resource names to differentiate from other services.                                                                                          | `string`       | `""`           | no       |
 | service_short                     | Short name for the service. Used in resource names with character limits. Defaults to the same value as `service`.                                                                                                                                 | `string`       | `""`           | no       |
 | [security_group_rules]            | Security group rules to control cluster ingress and egress.                                                                                                                                                                                        | `map(object)`  | `{}`           | no       |
@@ -243,7 +244,7 @@ vault in the current region.
 
 ```hcl
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.7.0"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.1"
 
   project     = "my-project"
   environment = "dev"
@@ -575,6 +576,46 @@ security_group_rules = {
 | prefix_list_ids          | List of prefix list IDs to allow access.                                  | `list(string)` | `[]`                    | no       |
 | source_security_group_id | ID of another security group to allow access.                             | `string`       | `null`                  | no       |
 
+### lattice_share
+
+> [!WARNING]
+> Only the primary cluster is shared. If `replica.enabled` is `true`, a global
+> database failover leaves consumers pointed at the old primary, which would be
+> read-only.
+
+You can grant access to your database cluster to other AWS accounts using
+[VPC Lattice][vpc-lattice] and [AWS Resource Access Manager (RAM)][ram]. When
+`lattice_share` is set, the module creates an ARN-type resource configuration
+for the cluster in your resource gateway before sharing it with the specified
+principals.
+
+```hcl
+module "database" {
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.1"
+
+  # ...
+
+  lattice_share = {
+    resource_gateway_id = aws_vpclattice_resource_gateway.this.id
+    security_group_id   = aws_security_group.lattice_gateway.id
+    principals          = ["123456789012"]
+  }
+}
+```
+
+> [!IMPORTANT]
+> If your AWS organization _doesn't_ have [resource sharing with AWS
+> organizations][org-sharing] enabled, you must set `allow_external_principals =
+> true`, even if the account you're sharing with is part of your AWS
+> organization.
+
+| Name                      | Description                                                                                                                   | Type           | Default | Required |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------- | ------- | -------- |
+| principals                | Account IDs, organization ARNs, or OU ARNs to share the resource configuration with.                                          | `list(string)` | n/a     | yes      |
+| resource_gateway_id       | ID of the VPC Lattice resource gateway to create the resource configuration in.                                               | `string`       | n/a     | yes      |
+| security_group_id         | ID of the resource gateway's security group. The module adds a rule allowing ingress from it to the cluster's security group. | `string`       | n/a     | yes      |
+| allow_external_principals | Whether to allow sharing with principals outside your AWS organization.                                                       | `bool`         | `false` | no       |
+
 ### replica
 
 Setting `replica.enabled = true` turns on a live, failover-ready read
@@ -589,7 +630,7 @@ provider "aws" {
 }
 
 module "database" {
-  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.12.0"
+  source = "github.com/codeforamerica/tofu-modules-aws-serverless-database?ref=1.13.1"
 
   project     = "my-project"
   environment = "prod"
@@ -623,34 +664,38 @@ module "database" {
 > - Requires AWS provider `>= 6.61` — that's what `rds-aurora` `>= 10.0`
 >   needs for `region` to work.
 
-| Name                    | Description                                                                                              | Type           | Default | Required |
-| ----------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | ------- | -------- |
-| enabled                 | Whether to create the replica cluster.                                                                    | `bool`         | `false` | no       |
-| region                  | Region to create the replica cluster in. Required when `enabled` is `true`.                               | `string`       | `null`  | no       |
-| vpc_id                  | Id of the VPC to launch the replica cluster into. Required when `enabled` is `true`.                      | `string`       | `null`  | no       |
-| subnets                 | List of subnet ids the replica cluster's instances may be placed in. Required when `enabled` is `true`.   | `list(string)` | `[]`    | no       |
-| ingress_cidrs           | List of CIDR blocks to allow ingress on the replica cluster.                                               | `list(string)` | `[]`    | no       |
-| logging_key_arn         | ARN of the KMS key for the replica cluster's logging. Must be a key in `region`. Required when `enabled`. | `string`       | `null`  | no       |
-| min_capacity            | Minimum capacity for the replica cluster in ACUs.                                                          | `number`       | `2`     | no       |
-| max_capacity            | Maximum capacity for the replica cluster in ACUs.                                                          | `number`       | `10`    | no       |
-| instances               | Number of instances to create in the replica cluster.                                                      | `number`       | `2`     | no       |
-| [security_group_rules]  | Security group rules for the replica cluster. Same shape as the top-level `security_group_rules`.          | `map(object)`  | `{}`    | no       |
+| Name                   | Description                                                                                               | Type           | Default | Required |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | ------- | -------- |
+| enabled                | Whether to create the replica cluster.                                                                    | `bool`         | `false` | no       |
+| region                 | Region to create the replica cluster in. Required when `enabled` is `true`.                               | `string`       | `null`  | no       |
+| vpc_id                 | Id of the VPC to launch the replica cluster into. Required when `enabled` is `true`.                      | `string`       | `null`  | no       |
+| subnets                | List of subnet ids the replica cluster's instances may be placed in. Required when `enabled` is `true`.   | `list(string)` | `[]`    | no       |
+| ingress_cidrs          | List of CIDR blocks to allow ingress on the replica cluster.                                              | `list(string)` | `[]`    | no       |
+| logging_key_arn        | ARN of the KMS key for the replica cluster's logging. Must be a key in `region`. Required when `enabled`. | `string`       | `null`  | no       |
+| min_capacity           | Minimum capacity for the replica cluster in ACUs.                                                         | `number`       | `2`     | no       |
+| max_capacity           | Maximum capacity for the replica cluster in ACUs.                                                         | `number`       | `10`    | no       |
+| instances              | Number of instances to create in the replica cluster.                                                     | `number`       | `2`     | no       |
+| [security_group_rules] | Security group rules for the replica cluster. Same shape as the top-level `security_group_rules`.         | `map(object)`  | `{}`    | no       |
 
 ## Outputs
 
-| Name                     | Description                                                                                               | Type          |
-| ------------------------ | --------------------------------------------------------------------------------------------------------- | ------------- |
-| backup_key_arn           | ARN of the primary KMS key for backups, if created.                                                       | `string`      |
-| backup_vault_arn         | ARN of the backup vault, if created.                                                                      | `string`      |
-| backup_vault_replica_arn | ARN of the backup vault replica, if created.                                                              | `string`      |
-| cluster_endpoint         | DNS endpoint to connect to the database cluster.                                                          | `string`      |
-| cluster_id               | ID of the RDS database cluster.                                                                           | `string`      |
-| cluster_resource_id      | Resource ID of the RDS database cluster.                                                                  | `string`      |
-| db_user_secret_arns      | Map of database username to the ARN of the Secrets Manager secret containing their credentials.           | `map(string)` |
-| global_cluster_id        | ID of the Aurora Global Database, if `replica.enabled` is `true`.                                         | `string`      |
-| iam_db_user_policy_arns  | Map of IAM database username to the ARN of the IAM policy granting `rds-db:connect` access for that user. | `map(string)` |
-| replica_cluster_endpoint | DNS endpoint of the replica cluster, if `replica.enabled` is `true`.                                      | `string`      |
-| secret_arn               | ARN of the secret holding database credentials.                                                           | `string`      |
+| Name                     | Description                                                                                                                                                   | Type          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| backup_key_arn           | ARN of the primary KMS key for backups, if created.                                                                                                           | `string`      |
+| backup_vault_arn         | ARN of the backup vault, if created.                                                                                                                          | `string`      |
+| backup_vault_replica_arn | ARN of the backup vault replica, if created.                                                                                                                  | `string`      |
+| cluster_arn              | ARN of the RDS database cluster.                                                                                                                              | `string`      |
+| cluster_endpoint         | DNS endpoint to connect to the database cluster.                                                                                                              | `string`      |
+| cluster_id               | ID of the RDS database cluster.                                                                                                                               | `string`      |
+| cluster_resource_id      | Resource ID of the RDS database cluster.                                                                                                                      | `string`      |
+| db_user_secret_arns      | Map of database username to the ARN of the Secrets Manager secret containing their credentials.                                                               | `map(string)` |
+| global_cluster_id        | ID of the Aurora Global Database, if `replica.enabled` is `true`.                                                                                             | `string`      |
+| iam_db_user_policy_arns  | Map of IAM database username to the ARN of the IAM policy granting `rds-db:connect` access for that user.                                                     | `map(string)` |
+| lattice_share            | ARNs of the VPC Lattice share, if `lattice_share` is set. Contains `configuration_arn` (the resource configuration) and `share_arn` (the RAM resource share). | `object`      |
+| reader_endpoint          | Reader endpoint of the database cluster.                                                                                                                      | `string`      |
+| replica_cluster_endpoint | DNS endpoint of the replica cluster, if `replica.enabled` is `true`.                                                                                          | `string`      |
+| secret_arn               | ARN of the secret holding database credentials.                                                                                                               | `string`      |
+| security_group_id        | ID of the security group attached to the database cluster.                                                                                                    | `string`      |
 
 [acus]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html#aurora-serverless-v2.how-it-works.capacity
 [aurora-serverless]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html
@@ -668,7 +713,11 @@ module "database" {
 [enforce_ssl]: #enforce_ssl
 [iam-auth]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html
 [aurora-global-database]: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html
+[lattice_share]: #lattice_share
 [latest-release]: https://github.com/codeforamerica/tofu-modules-aws-serverless-database/releases/latest
 [parameter-groups]: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/parameter-groups-overview.html
+[org-sharing]: https://docs.aws.amazon.com/ram/latest/userguide/getting-started-sharing.html#getting-started-sharing-orgs
+[ram]: https://docs.aws.amazon.com/ram/latest/userguide/what-is.html
 [replica]: #replica
 [security_group_rules]: #security_group_rules
+[vpc-lattice]: https://docs.aws.amazon.com/vpc-lattice/latest/ug/what-is-vpc-lattice.html
