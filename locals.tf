@@ -50,11 +50,9 @@ locals {
   short_prefix  = "${local.project_short}-${var.environment}${var.service != "" ? "-${local.service_short}" : ""}"
 
   # Resource configuration names are limited to 40 lowercase characters.
-  lattice_name  = lower(local.short_prefix)
-  lattice_share = var.lattice_share != null ? { this = var.lattice_share } : {}
-  lattice_principals = var.lattice_share != null ? {
-    for i, principal in var.lattice_share.principals : tostring(i) => principal
-  } : {}
+  lattice_name       = lower(local.short_prefix)
+  lattice_share      = var.lattice_share != null ? { this = var.lattice_share } : {}
+  lattice_principals = var.lattice_share != null ? toset(var.lattice_share.principals) : toset([])
 
   # Merge any ingress CIDR blocks with the security group rules. Every
   # entry needs the same attributes, or merge() silently drops the ones
