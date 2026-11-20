@@ -3,7 +3,7 @@ commitizen:
   changelog_incremental: true
   name: cz_conventional_commits
   update_changelog_on_bump: true
-  version: 1.13.1
+  version: 1.14.0
   version_files:
   - README.md:ref=
   version_scheme: semver2
