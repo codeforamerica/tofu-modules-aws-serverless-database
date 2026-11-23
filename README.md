@@ -465,10 +465,42 @@ database(s). The user will be assigned a randomly generated password, and their
 credentials will be stored in AWS Secrets Manager. The ARN of the secret for
 each user is available in the `db_user_secret_arns` output.
 
-| Name       | Description                                                                              | Type           | Default      | Required |
-| ---------- | ---------------------------------------------------------------------------------------- | -------------- | ------------ | -------- |
-| databases  | List of databases to grant the user access to.                                           | `list(string)` | n/a          | yes      |
-| privileges | Privileges to grant on the databases for the user. The only valid value is `"readonly"`. | `string`       | `"readonly"` | no       |
+> [!NOTE]
+> `schemas`, `default_privileges_for_roles`, and `role_settings` (below) are
+> only supported with `engine = "postgresql"`; setting any of them with
+> `engine = "mysql"` fails the plan.
+
+By default, grants only cover tables that exist (or that the master user
+creates) at apply time. If an application's migration role creates new tables
+later, list that role in `default_privileges_for_roles` so the read-only user
+picks up future tables too, without needing to re-apply:
+
+```hcl
+enable_data_api = true
+db_users = {
+  "myreadonlyuser" = {
+    databases                    = ["my_stats"]
+    schemas                       = ["public", "reporting"]
+    default_privileges_for_roles = ["my_stats_migrator"]
+    role_settings = {
+      default_transaction_read_only = true
+      statement_timeout              = 30000 # milliseconds
+      connection_limit                = 5
+    }
+  }
+}
+```
+
+Roles in `default_privileges_for_roles` must already exist on the cluster, and
+names are case-sensitive since they're quoted in the generated SQL.
+
+| Name                          | Description                                                                                                 | Type           | Default      | Required |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------ | -------------- | ------------ | -------- |
+| databases                     | List of databases to grant the user access to.                                                              | `list(string)` | n/a          | yes      |
+| privileges                    | Privileges to grant on the databases for the user. The only valid value is `"readonly"`.                    | `string`       | `"readonly"` | no       |
+| schemas                        | Schemas (within each database) to grant the user access to.                                                 | `list(string)` | `["public"]` | no       |
+| default_privileges_for_roles  | Roles whose future tables/sequences in `schemas` the user should also be able to `SELECT` from.             | `list(string)` | `[]`         | no       |
+| role_settings                  | Session defaults for the user: `default_transaction_read_only` (bool), `statement_timeout` (ms), `connection_limit`. | `object`       | `{}`         | no       |
 
 ### iam_db_users
 

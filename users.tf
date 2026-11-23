@@ -117,25 +117,33 @@ resource "null_resource" "db_user" {
   for_each   = var.db_users
   depends_on = [module.database, aws_secretsmanager_secret_version.db_user]
 
-  triggers = {
-    username        = each.key
-    cluster_arn     = module.database.cluster_arn
-    secret_arn      = module.database.cluster_master_user_secret[0].secret_arn
-    user_secret_arn = aws_secretsmanager_secret.db_user[each.key].arn
-    region          = data.aws_region.current.region
-    engine          = var.engine
-    databases       = join(",", each.value.databases)
-  }
+  triggers = merge(
+    {
+      username        = each.key
+      cluster_arn     = module.database.cluster_arn
+      secret_arn      = module.database.cluster_master_user_secret[0].secret_arn
+      user_secret_arn = aws_secretsmanager_secret.db_user[each.key].arn
+      region          = data.aws_region.current.region
+      engine          = var.engine
+      databases       = join(",", each.value.databases)
+    },
+    local.db_user_hardening_triggers[each.key]
+  )
 
   provisioner "local-exec" {
     command = templatefile("${path.module}/templates/db-user-create.sh.tftpl", {
-      username        = self.triggers.username
-      cluster_arn     = self.triggers.cluster_arn
-      secret_arn      = self.triggers.secret_arn
-      user_secret_arn = self.triggers.user_secret_arn
-      region          = self.triggers.region
-      engine          = self.triggers.engine
-      databases_csv   = self.triggers.databases
+      username                         = self.triggers.username
+      cluster_arn                      = self.triggers.cluster_arn
+      secret_arn                       = self.triggers.secret_arn
+      user_secret_arn                  = self.triggers.user_secret_arn
+      region                           = self.triggers.region
+      engine                           = self.triggers.engine
+      databases_csv                    = self.triggers.databases
+      schemas_csv                      = lookup(self.triggers, "schemas", "public")
+      default_privileges_for_roles_csv = lookup(self.triggers, "default_privileges_for_roles", "")
+      default_transaction_read_only    = lookup(self.triggers, "default_transaction_read_only", "")
+      statement_timeout                = lookup(self.triggers, "statement_timeout", "")
+      connection_limit                 = lookup(self.triggers, "connection_limit", "")
     })
     interpreter = ["bash", "-c"]
   }
@@ -143,11 +151,13 @@ resource "null_resource" "db_user" {
   provisioner "local-exec" {
     when = destroy
     command = templatefile("${path.module}/templates/db-user-destroy.sh.tftpl", {
-      username    = self.triggers.username
-      cluster_arn = self.triggers.cluster_arn
-      secret_arn  = self.triggers.secret_arn
-      region      = self.triggers.region
-      engine      = self.triggers.engine
+      username                         = self.triggers.username
+      cluster_arn                      = self.triggers.cluster_arn
+      secret_arn                       = self.triggers.secret_arn
+      region                           = self.triggers.region
+      engine                           = self.triggers.engine
+      schemas_csv                      = lookup(self.triggers, "schemas", "public")
+      default_privileges_for_roles_csv = lookup(self.triggers, "default_privileges_for_roles", "")
     })
     interpreter = ["bash", "-c"]
   }

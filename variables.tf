@@ -225,11 +225,22 @@ variable "db_users" {
   type = map(object({
     databases  = list(string)
     privileges = optional(string, "readonly")
+
+    schemas                      = optional(list(string), ["public"])
+    default_privileges_for_roles = optional(list(string), [])
+    role_settings = optional(object({
+      default_transaction_read_only = optional(bool)
+      statement_timeout             = optional(number)
+      connection_limit              = optional(number)
+    }), {})
   }))
   description = <<-EOT
     Map of database users to create on the cluster. The map key becomes the
     database username. Requires `enable_data_api = true` and the AWS CLI must
     be installed on the OpenTofu runner.
+
+    `schemas`, `default_privileges_for_roles`, and `role_settings` are only
+    supported with `engine = "postgresql"`.
     EOT
   default     = {}
 
@@ -272,6 +283,27 @@ variable "db_users" {
       user.privileges == "readonly"
     ])
     error_message = "Database user privileges must be \"readonly\"; only read-only access is supported for db_users."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, user in var.db_users :
+      length(user.schemas) > 0 &&
+      alltrue([for name in concat(user.schemas, user.default_privileges_for_roles) : can(regex("^[a-zA-Z_][a-zA-Z0-9_-]{0,62}$", name))]) &&
+      (user.role_settings.connection_limit == null || (user.role_settings.connection_limit >= -1 && floor(user.role_settings.connection_limit) == user.role_settings.connection_limit)) &&
+      (user.role_settings.statement_timeout == null || (user.role_settings.statement_timeout >= 0 && floor(user.role_settings.statement_timeout) == user.role_settings.statement_timeout))
+    ])
+    error_message = "db_users schemas (non-empty) and default_privileges_for_roles entries must be valid identifiers; role_settings.connection_limit must be a whole number >= -1; role_settings.statement_timeout must be a whole number >= 0."
+  }
+
+  validation {
+    condition = var.engine == "postgresql" || alltrue([
+      for _, user in var.db_users :
+      length(user.schemas) == 1 && user.schemas[0] == "public" &&
+      length(user.default_privileges_for_roles) == 0 &&
+      alltrue([for _, v in user.role_settings : v == null])
+    ])
+    error_message = "schemas, default_privileges_for_roles, and role_settings on db_users require engine = \"postgresql\"."
   }
 }
 

@@ -112,4 +112,19 @@ locals {
     }
   )
 
+  # Per-user db_users hardening triggers: empty map for a user at defaults,
+  # so unused entries keep their pre-hardening triggers shape.
+  db_user_hardening_triggers = {
+    for username, user in var.db_users : username => (
+      length(user.schemas) == 1 && user.schemas[0] == "public" &&
+      length(user.default_privileges_for_roles) == 0 &&
+      alltrue([for _, v in user.role_settings : v == null])
+      ) ? {} : {
+      schemas                       = join(",", user.schemas)
+      default_privileges_for_roles  = join(",", user.default_privileges_for_roles)
+      default_transaction_read_only = user.role_settings.default_transaction_read_only == null ? "" : (user.role_settings.default_transaction_read_only ? "on" : "off")
+      statement_timeout             = user.role_settings.statement_timeout == null ? "" : tostring(user.role_settings.statement_timeout)
+      connection_limit              = user.role_settings.connection_limit == null ? "" : tostring(user.role_settings.connection_limit)
+    }
+  }
 }

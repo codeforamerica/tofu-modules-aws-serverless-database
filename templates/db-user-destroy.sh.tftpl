@@ -12,6 +12,8 @@ ENGINE="${engine}"
 REGION="${region}"
 SECRET_ARN="${secret_arn}"
 USERNAME="${username}"
+SCHEMAS_CSV="${schemas_csv}"
+DEFAULT_PRIVILEGES_FOR_ROLES_CSV="${default_privileges_for_roles_csv}"
 
 # Disable the AWS pager.
 export AWS_PAGER=""
@@ -100,6 +102,9 @@ elif [ "$ENGINE" = "postgresql" ]; then
       grep -v '^rdsadmin$' || true
   )
 
+  IFS=',' read -ra SCHEMAS <<< "$SCHEMAS_CSV"
+  IFS=',' read -ra DEFAULT_PRIVILEGE_ROLES <<< "$DEFAULT_PRIVILEGES_FOR_ROLES_CSV"
+
   # Just to be safe, revoke privileges from all databases.
   for DB in $dblist; do
     echo "Revoking $USERNAME privileges from database $DB..."
@@ -110,11 +115,17 @@ elif [ "$ENGINE" = "postgresql" ]; then
     # with a stuck role — a stuck role is the safer failure mode.
     run_sql "$DB" "REASSIGN OWNED BY \"$USERNAME\" TO root;"
     run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
-    run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
-    run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"
-    run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM \"$USERNAME\";"
-    run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL PRIVILEGES ON TABLES FROM \"$USERNAME\";"
-    run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL PRIVILEGES ON SEQUENCES FROM \"$USERNAME\";"
+    for SCHEMA in "$${SCHEMAS[@]}"; do
+      run_sql "$DB" "REVOKE USAGE ON SCHEMA \"$SCHEMA\" FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA \"$SCHEMA\" FROM \"$USERNAME\";"
+      run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA \"$SCHEMA\" FROM \"$USERNAME\";"
+      run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA \"$SCHEMA\" REVOKE ALL PRIVILEGES ON TABLES FROM \"$USERNAME\";"
+      run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA \"$SCHEMA\" REVOKE ALL PRIVILEGES ON SEQUENCES FROM \"$USERNAME\";"
+      for ROLE in "$${DEFAULT_PRIVILEGE_ROLES[@]}"; do
+        run_sql "$DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$ROLE\" IN SCHEMA \"$SCHEMA\" REVOKE ALL PRIVILEGES ON TABLES FROM \"$USERNAME\";"
+        run_sql "$DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$ROLE\" IN SCHEMA \"$SCHEMA\" REVOKE ALL PRIVILEGES ON SEQUENCES FROM \"$USERNAME\";"
+      done
+    done
   done
 
   run_sql "postgres" "DROP USER IF EXISTS \"$USERNAME\";"
