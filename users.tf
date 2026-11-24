@@ -117,6 +117,9 @@ resource "null_resource" "db_user" {
   for_each   = var.db_users
   depends_on = [module.database, aws_secretsmanager_secret_version.db_user]
 
+  # Only merged in for users with a non-default schemas/default_privileges_for_roles/
+  # role setting — adding these keys for every entry would change legacy
+  # users' triggers shape and force-replace them.
   triggers = merge(
     {
       username        = each.key
@@ -127,7 +130,19 @@ resource "null_resource" "db_user" {
       engine          = var.engine
       databases       = join(",", each.value.databases)
     },
-    local.db_user_hardening_triggers[each.key]
+    (
+      length(each.value.schemas) == 1 && each.value.schemas[0] == "public" &&
+      length(each.value.default_privileges_for_roles) == 0 &&
+      each.value.default_transaction_read_only == null &&
+      each.value.statement_timeout == null &&
+      each.value.connection_limit == null
+      ) ? {} : {
+      schemas                       = join(",", each.value.schemas)
+      default_privileges_for_roles  = join(",", each.value.default_privileges_for_roles)
+      default_transaction_read_only = each.value.default_transaction_read_only == null ? "" : (each.value.default_transaction_read_only ? "on" : "off")
+      statement_timeout             = each.value.statement_timeout == null ? "" : tostring(each.value.statement_timeout)
+      connection_limit              = each.value.connection_limit == null ? "" : tostring(each.value.connection_limit)
+    }
   )
 
   provisioner "local-exec" {
