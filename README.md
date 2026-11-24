@@ -466,10 +466,9 @@ credentials will be stored in AWS Secrets Manager. The ARN of the secret for
 each user is available in the `db_user_secret_arns` output.
 
 > [!NOTE]
-> `schemas`, `default_privileges_for_roles`, `default_transaction_read_only`,
-> `statement_timeout`, and `connection_limit` (below) are only supported with
-> `engine = "postgresql"`; setting any of them with `engine = "mysql"` fails
-> the plan.
+> `schemas`, `default_transaction_read_only`, `statement_timeout`, and
+> `connection_limit` (below) are only supported with `engine = "postgresql"`;
+> setting any of them with `engine = "mysql"` fails the plan.
 
 > [!WARNING]
 > Upgrading from an older version that granted default privileges from the
@@ -481,9 +480,10 @@ each user is available in the `db_user_secret_arns` output.
 By default, grants only cover tables that exist (or that the root user
 creates) at apply time. Every `"all"`-privilege `iam_db_users`/`apps` role
 that shares one of this user's `databases` (or has no `databases` of its own,
-meaning cluster-wide access) is automatically covered too — list a role in
-`default_privileges_for_roles` only if it's created outside this module and
-isn't already picked up automatically:
+meaning cluster-wide access) is automatically covered too, with no extra
+config needed — there's no way to grant this to a role outside
+`iam_db_users`/`apps`, so declare it there rather than creating it some
+other way:
 
 ```hcl
 enable_data_api = true
@@ -491,7 +491,6 @@ db_users = {
   "myreadonlyuser" = {
     databases                     = ["my_stats"]
     schemas                        = ["public", "reporting"]
-    default_privileges_for_roles  = ["unmanaged_migrator"]
     default_transaction_read_only = true
     statement_timeout              = 30000 # milliseconds
     connection_limit                = 5
@@ -499,15 +498,11 @@ db_users = {
 }
 ```
 
-Roles in `default_privileges_for_roles` must already exist on the cluster, and
-names are case-sensitive since they're quoted in the generated SQL.
-
 | Name                          | Description                                                                                       | Type           | Default      | Required |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------- | -------------- | ------------ | -------- |
 | databases                     | List of databases to grant the user access to.                                                      | `list(string)` | n/a          | yes      |
 | privileges                    | Privileges to grant on the databases for the user. The only valid value is `"readonly"`.            | `string`       | `"readonly"` | no       |
 | schemas                        | Schemas (within each database) to grant the user access to.                                         | `list(string)` | `["public"]` | no       |
-| default_privileges_for_roles  | Additional roles whose future tables/sequences in `schemas` the user should also be able to `SELECT` from, beyond the `iam_db_users`/`apps` roles already covered automatically. | `list(string)` | `[]` | no |
 | default_transaction_read_only | Whether the user's sessions default to read-only transactions.                                      | `bool`         | `null`       | no       |
 | statement_timeout              | Milliseconds before a query run by the user is cancelled.                                           | `number`       | `null`       | no       |
 | connection_limit                | Maximum concurrent connections for the user, or `-1` for unlimited.                                 | `number`       | `null`       | no       |

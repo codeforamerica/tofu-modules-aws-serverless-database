@@ -227,7 +227,6 @@ variable "db_users" {
     privileges = optional(string, "readonly")
 
     schemas                       = optional(list(string), ["public"])
-    default_privileges_for_roles  = optional(list(string), [])
     default_transaction_read_only = optional(bool)
     statement_timeout             = optional(number)
     connection_limit              = optional(number)
@@ -237,14 +236,15 @@ variable "db_users" {
     database username. Requires `enable_data_api = true` and the AWS CLI must
     be installed on the OpenTofu runner.
 
-    `schemas`, `default_privileges_for_roles`, `default_transaction_read_only`,
-    `statement_timeout`, and `connection_limit` are only supported with
-    `engine = "postgresql"`.
+    `schemas`, `default_transaction_read_only`, `statement_timeout`, and
+    `connection_limit` are only supported with `engine = "postgresql"`.
 
     Every `"all"`-privilege `iam_db_users`/`apps` role that shares one of this
     user's `databases` (or has no `databases` of its own, meaning cluster-wide
-    access) is automatically unioned into `default_privileges_for_roles` —
-    you only need to list roles here that aren't managed by this module.
+    access) automatically gets default SELECT privileges granted to this
+    user for its future tables/sequences in `schemas`. There's no way to
+    grant this to a role outside `iam_db_users`/`apps` — declare it there
+    instead of creating it some other way.
     EOT
   default     = {}
 
@@ -308,14 +308,6 @@ variable "db_users" {
   validation {
     condition = alltrue([
       for _, user in var.db_users :
-      alltrue([for r in user.default_privileges_for_roles : can(regex("^[a-zA-Z_][a-zA-Z0-9_-]{0,62}$", r))])
-    ])
-    error_message = "db_users default_privileges_for_roles entries must be valid role name identifiers."
-  }
-
-  validation {
-    condition = alltrue([
-      for _, user in var.db_users :
       user.connection_limit == null || (user.connection_limit >= -1 && floor(user.connection_limit) == user.connection_limit)
     ])
     error_message = "db_users connection_limit must be a whole number >= -1."
@@ -333,12 +325,11 @@ variable "db_users" {
     condition = var.engine == "postgresql" || alltrue([
       for _, user in var.db_users :
       length(user.schemas) == 1 && user.schemas[0] == "public" &&
-      length(user.default_privileges_for_roles) == 0 &&
       user.default_transaction_read_only == null &&
       user.statement_timeout == null &&
       user.connection_limit == null
     ])
-    error_message = "schemas, default_privileges_for_roles, default_transaction_read_only, statement_timeout, and connection_limit on db_users require engine = \"postgresql\"."
+    error_message = "schemas, default_transaction_read_only, statement_timeout, and connection_limit on db_users require engine = \"postgresql\"."
   }
 }
 

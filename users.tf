@@ -115,14 +115,14 @@ resource "aws_secretsmanager_secret_version" "db_user" {
 
 resource "null_resource" "db_user" {
   for_each = var.db_users
-  # iam_db_user must exist first: the auto-discovered default_privileges_for_roles
-  # set can name a role created by that resource, and ALTER DEFAULT PRIVILEGES
-  # FOR ROLE fails outright if the role isn't there yet.
+  # iam_db_user must exist first: db_users_write_roles can name a role
+  # created by that resource, and ALTER DEFAULT PRIVILEGES FOR ROLE fails
+  # outright if the role isn't there yet.
   depends_on = [module.database, aws_secretsmanager_secret_version.db_user, null_resource.iam_db_user]
 
-  # Only merged in for users with a non-default schemas/default_privileges_for_roles/
-  # role setting — adding these keys for every entry would change legacy
-  # users' triggers shape and force-replace them.
+  # Only merged in for users with a non-default schemas/write-roles/role
+  # setting — adding these keys for every entry would change legacy users'
+  # triggers shape and force-replace them.
   triggers = merge(
     {
       username        = each.key
@@ -135,13 +135,13 @@ resource "null_resource" "db_user" {
     },
     (
       length(each.value.schemas) == 1 && each.value.schemas[0] == "public" &&
-      length(local.db_users_effective_roles[each.key]) == 0 &&
+      length(local.db_users_write_roles[each.key]) == 0 &&
       each.value.default_transaction_read_only == null &&
       each.value.statement_timeout == null &&
       each.value.connection_limit == null
       ) ? {} : {
       schemas                       = join(",", each.value.schemas)
-      default_privileges_for_roles  = join(",", local.db_users_effective_roles[each.key])
+      default_privileges_for_roles  = join(",", local.db_users_write_roles[each.key])
       default_transaction_read_only = each.value.default_transaction_read_only == null ? "" : (each.value.default_transaction_read_only ? "on" : "off")
       statement_timeout             = each.value.statement_timeout == null ? "" : tostring(each.value.statement_timeout)
       connection_limit              = each.value.connection_limit == null ? "" : tostring(each.value.connection_limit)
