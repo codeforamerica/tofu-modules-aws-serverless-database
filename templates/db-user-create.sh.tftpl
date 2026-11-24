@@ -163,7 +163,7 @@ elif [ "$ENGINE" = "postgresql" ]; then
       run_sql "$DB" "GRANT USAGE ON SCHEMA \"$SCHEMA\" TO \"$USERNAME\";"
       run_sql "$DB" "GRANT SELECT ON ALL TABLES IN SCHEMA \"$SCHEMA\" TO \"$USERNAME\";"
       run_sql "$DB" "GRANT SELECT ON ALL SEQUENCES IN SCHEMA \"$SCHEMA\" TO \"$USERNAME\";"
-      # Covers tables the master creates later. Tables created by one of
+      # Covers tables the root user creates later. Tables created by one of
       # default_privileges_for_roles below need their own grantor-scoped grant.
       run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA \"$SCHEMA\" GRANT SELECT ON TABLES TO \"$USERNAME\";"
       run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA \"$SCHEMA\" GRANT SELECT ON SEQUENCES TO \"$USERNAME\";"

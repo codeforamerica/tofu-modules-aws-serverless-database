@@ -150,6 +150,23 @@ locals {
     }
   ]...)
 
+  # Each db_users entry's effective default_privileges_for_roles: the
+  # explicit list, plus (only when auto_discover_write_roles is set) every
+  # "all"-privilege iam_db_users/apps role sharing one of its databases, or
+  # with no databases of its own (cluster-wide access).
+  db_users_effective_roles = {
+    for username, user in var.db_users : username => distinct(concat(
+      user.default_privileges_for_roles,
+      user.auto_discover_write_roles ? [
+        for role_username, role in local.combined_iam_db_users : role_username
+        if role.privileges == "all" && (
+          length(role.databases) == 0 ||
+          length([for db in role.databases : db if contains(user.databases, db)]) > 0
+        )
+      ] : []
+    ))
+  }
+
   # db_users creates roles in the same Postgres username namespace, so a
   # collision with it is just as real despite the separate resource path.
   db_users_username_sources = [
