@@ -466,19 +466,24 @@ credentials will be stored in AWS Secrets Manager. The ARN of the secret for
 each user is available in the `db_user_secret_arns` output.
 
 > [!NOTE]
-> `schemas`, `default_privileges_for_roles`, `auto_discover_write_roles`,
-> `default_transaction_read_only`, `statement_timeout`, and `connection_limit`
-> (below) are only supported with `engine = "postgresql"`; setting any of
-> them with `engine = "mysql"` fails the plan.
+> `schemas`, `default_privileges_for_roles`, `default_transaction_read_only`,
+> `statement_timeout`, and `connection_limit` (below) are only supported with
+> `engine = "postgresql"`; setting any of them with `engine = "mysql"` fails
+> the plan.
+
+> [!WARNING]
+> Upgrading from an older version that granted default privileges from the
+> root user only: any existing `db_users` entry that shares a database with
+> an `"all"`-privilege `iam_db_users`/`apps` role gets dropped and recreated
+> on the next apply, to pick up default privileges for that role too. Expect
+> a brief window where that connection is unavailable.
 
 By default, grants only cover tables that exist (or that the root user
-creates) at apply time. If an application's migration role creates new tables
-later, list that role in `default_privileges_for_roles` so the read-only user
-picks up future tables too, without needing to re-apply. If the migration
-role is itself managed by this module (an `iam_db_users` or `apps` entry with
-`privileges = "all"`), set `auto_discover_write_roles = true` instead and skip
-naming it — any such role sharing one of this user's `databases` gets added
-automatically:
+creates) at apply time. Every `"all"`-privilege `iam_db_users`/`apps` role
+that shares one of this user's `databases` (or has no `databases` of its own,
+meaning cluster-wide access) is automatically covered too — list a role in
+`default_privileges_for_roles` only if it's created outside this module and
+isn't already picked up automatically:
 
 ```hcl
 enable_data_api = true
@@ -487,7 +492,6 @@ db_users = {
     databases                     = ["my_stats"]
     schemas                        = ["public", "reporting"]
     default_privileges_for_roles  = ["unmanaged_migrator"]
-    auto_discover_write_roles     = true
     default_transaction_read_only = true
     statement_timeout              = 30000 # milliseconds
     connection_limit                = 5
@@ -503,8 +507,7 @@ names are case-sensitive since they're quoted in the generated SQL.
 | databases                     | List of databases to grant the user access to.                                                      | `list(string)` | n/a          | yes      |
 | privileges                    | Privileges to grant on the databases for the user. The only valid value is `"readonly"`.            | `string`       | `"readonly"` | no       |
 | schemas                        | Schemas (within each database) to grant the user access to.                                         | `list(string)` | `["public"]` | no       |
-| default_privileges_for_roles  | Roles whose future tables/sequences in `schemas` the user should also be able to `SELECT` from.     | `list(string)` | `[]`         | no       |
-| auto_discover_write_roles      | Also apply `default_privileges_for_roles` to every `iam_db_users`/`apps` role with write access to one of `databases`. | `bool` | `false` | no |
+| default_privileges_for_roles  | Additional roles whose future tables/sequences in `schemas` the user should also be able to `SELECT` from, beyond the `iam_db_users`/`apps` roles already covered automatically. | `list(string)` | `[]` | no |
 | default_transaction_read_only | Whether the user's sessions default to read-only transactions.                                      | `bool`         | `null`       | no       |
 | statement_timeout              | Milliseconds before a query run by the user is cancelled.                                           | `number`       | `null`       | no       |
 | connection_limit                | Maximum concurrent connections for the user, or `-1` for unlimited.                                 | `number`       | `null`       | no       |

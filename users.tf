@@ -115,9 +115,9 @@ resource "aws_secretsmanager_secret_version" "db_user" {
 
 resource "null_resource" "db_user" {
   for_each = var.db_users
-  # iam_db_user must exist first: default_privileges_for_roles (including
-  # auto_discover_write_roles) can name a role created by that resource, and
-  # ALTER DEFAULT PRIVILEGES FOR ROLE fails outright if the role isn't there yet.
+  # iam_db_user must exist first: the auto-discovered default_privileges_for_roles
+  # set can name a role created by that resource, and ALTER DEFAULT PRIVILEGES
+  # FOR ROLE fails outright if the role isn't there yet.
   depends_on = [module.database, aws_secretsmanager_secret_version.db_user, null_resource.iam_db_user]
 
   # Only merged in for users with a non-default schemas/default_privileges_for_roles/

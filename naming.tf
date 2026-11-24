@@ -151,13 +151,14 @@ locals {
   ]...)
 
   # Each db_users entry's effective default_privileges_for_roles: the
-  # explicit list, plus (only when auto_discover_write_roles is set) every
-  # "all"-privilege iam_db_users/apps role sharing one of its databases, or
-  # with no databases of its own (cluster-wide access).
+  # explicit list, plus every "all"-privilege iam_db_users/apps role sharing
+  # one of its databases, or with no databases of its own (cluster-wide
+  # access). Postgres-only — MySQL has no ALTER DEFAULT PRIVILEGES equivalent,
+  # so there's nothing to auto-discover there.
   db_users_effective_roles = {
     for username, user in var.db_users : username => distinct(concat(
       user.default_privileges_for_roles,
-      user.auto_discover_write_roles ? [
+      var.engine == "postgresql" ? [
         for role_username, role in local.combined_iam_db_users : role_username
         if role.privileges == "all" && (
           length(role.databases) == 0 ||
