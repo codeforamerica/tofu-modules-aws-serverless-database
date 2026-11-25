@@ -465,25 +465,11 @@ database(s). The user will be assigned a randomly generated password, and their
 credentials will be stored in AWS Secrets Manager. The ARN of the secret for
 each user is available in the `db_user_secret_arns` output.
 
-> [!NOTE]
-> `schemas`, `default_transaction_read_only`, `statement_timeout`, and
-> `connection_limit` (below) are only supported with `engine = "postgresql"`;
-> setting any of them with `engine = "mysql"` fails the plan.
-
 > [!WARNING]
-> Upgrading from an older version that granted default privileges from the
-> root user only: any existing `db_users` entry that shares a database with
-> an `"all"`-privilege `iam_db_users`/`apps` role gets dropped and recreated
-> on the next apply, to pick up default privileges for that role too. Expect
-> a brief window where that connection is unavailable.
-
-By default, grants only cover tables that exist (or that the root user
-creates) at apply time. Every `"all"`-privilege `iam_db_users`/`apps` role
-that shares one of this user's `databases` (or has no `databases` of its own,
-meaning cluster-wide access) is automatically covered too, with no extra
-config needed — there's no way to grant this to a role outside
-`iam_db_users`/`apps`, so declare it there rather than creating it some
-other way:
+> Prior to version 1.14.0, users defined in `db_users` with `all` privileges
+> were created without permission to access new objects created by others
+> users. Upgrading from an earlier version will recreate these users, which
+> may result in a brief disruption.
 
 ```hcl
 enable_data_api = true
@@ -498,14 +484,14 @@ db_users = {
 }
 ```
 
-| Name                          | Description                                                                                       | Type           | Default      | Required |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------- | -------------- | ------------ | -------- |
-| databases                     | List of databases to grant the user access to.                                                      | `list(string)` | n/a          | yes      |
-| privileges                    | Privileges to grant on the databases for the user. The only valid value is `"readonly"`.            | `string`       | `"readonly"` | no       |
-| schemas                        | Schemas (within each database) to grant the user access to.                                         | `list(string)` | `["public"]` | no       |
-| default_transaction_read_only | Whether the user's sessions default to read-only transactions.                                      | `bool`         | `null`       | no       |
-| statement_timeout              | Milliseconds before a query run by the user is cancelled.                                           | `number`       | `null`       | no       |
-| connection_limit                | Maximum concurrent connections for the user, or `-1` for unlimited.                                 | `number`       | `null`       | no       |
+| Name                          | Description                                                                                       | Engine       | Type           | Default      | Required |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------ | -------------- | ------------ | -------- |
+| databases                     | List of databases to grant the user access to.                                                      | all          | `list(string)` | n/a          | yes      |
+| privileges                    | Privileges to grant on the databases for the user. The only valid value is `"readonly"`.            | all          | `string`       | `"readonly"` | no       |
+| schemas                        | Schemas (within each database) to grant the user access to.                                         | postgresql   | `list(string)` | `["public"]` | no       |
+| default_transaction_read_only | Whether the user's sessions default to read-only transactions.                                      | postgresql   | `bool`         | `null`       | no       |
+| statement_timeout              | Milliseconds before a query run by the user is cancelled.                                           | postgresql   | `number`       | `null`       | no       |
+| connection_limit                | Maximum concurrent connections for the user, or `-1` for unlimited.                                 | postgresql   | `number`       | `null`       | no       |
 
 ### iam_db_users
 

@@ -238,13 +238,6 @@ variable "db_users" {
 
     `schemas`, `default_transaction_read_only`, `statement_timeout`, and
     `connection_limit` are only supported with `engine = "postgresql"`.
-
-    Every `"all"`-privilege `iam_db_users`/`apps` role that shares one of this
-    user's `databases` (or has no `databases` of its own, meaning cluster-wide
-    access) automatically gets default SELECT privileges granted to this
-    user for its future tables/sequences in `schemas`. There's no way to
-    grant this to a role outside `iam_db_users`/`apps` — declare it there
-    instead of creating it some other way.
     EOT
   default     = {}
 
