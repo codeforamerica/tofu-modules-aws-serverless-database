@@ -466,10 +466,33 @@ database(s). The user will be assigned a randomly generated password, and their
 credentials will be stored in AWS Secrets Manager. The ARN of the secret for
 each user is available in the `db_user_secret_arns` output.
 
-| Name       | Description                                                                              | Type           | Default      | Required |
-| ---------- | ---------------------------------------------------------------------------------------- | -------------- | ------------ | -------- |
-| databases  | List of databases to grant the user access to.                                           | `list(string)` | n/a          | yes      |
-| privileges | Privileges to grant on the databases for the user. The only valid value is `"readonly"`. | `string`       | `"readonly"` | no       |
+> [!WARNING]
+> Prior to version 1.14.0, users defined in `db_users` with `all` privileges
+> were created without permission to access new objects created by others
+> users. Upgrading from an earlier version will recreate these users, which
+> may result in a brief disruption.
+
+```hcl
+enable_data_api = true
+db_users = {
+  "myreadonlyuser" = {
+    databases                     = ["my_stats"]
+    schemas                        = ["public", "reporting"]
+    default_transaction_read_only = true
+    statement_timeout              = 30000 # milliseconds
+    connection_limit                = 5
+  }
+}
+```
+
+| Name                          | Description                                                                                       | Engine       | Type           | Default      | Required |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------ | -------------- | ------------ | -------- |
+| databases                     | List of databases to grant the user access to.                                                      | all          | `list(string)` | n/a          | yes      |
+| privileges                    | Privileges to grant on the databases for the user. The only valid value is `"readonly"`.            | all          | `string`       | `"readonly"` | no       |
+| schemas                        | Schemas (within each database) to grant the user access to.                                         | postgresql   | `list(string)` | `["public"]` | no       |
+| default_transaction_read_only | Whether the user's sessions default to read-only transactions.                                      | postgresql   | `bool`         | `null`       | no       |
+| statement_timeout              | Milliseconds before a query run by the user is cancelled.                                           | postgresql   | `number`       | `null`       | no       |
+| connection_limit                | Maximum concurrent connections for the user, or `-1` for unlimited.                                 | postgresql   | `number`       | `null`       | no       |
 
 ### iam_db_users
 

@@ -18,6 +18,11 @@ REGION="${region}"
 SECRET_ARN="${secret_arn}"
 USERNAME="${username}"
 USER_SECRET_ARN="${user_secret_arn}"
+SCHEMAS_CSV="${schemas_csv}"
+DEFAULT_PRIVILEGES_FOR_ROLES_CSV="${default_privileges_for_roles_csv}"
+DEFAULT_TRANSACTION_READ_ONLY="${default_transaction_read_only}"
+STATEMENT_TIMEOUT="${statement_timeout}"
+CONNECTION_LIMIT="${connection_limit}"
 
 # Disable the AWS pager.
 export AWS_PAGER=""
@@ -148,14 +153,26 @@ elif [ "$ENGINE" = "postgresql" ]; then
   )
 
   IFS=',' read -ra DBS <<< "$DATABASES_CSV"
+  IFS=',' read -ra SCHEMAS <<< "$SCHEMAS_CSV"
+  IFS=',' read -ra DEFAULT_PRIVILEGE_ROLES <<< "$DEFAULT_PRIVILEGES_FOR_ROLES_CSV"
+
   for DB in "$${DBS[@]}"; do
     echo "Granting $USERNAME SELECT privileges on database $DB..."
     run_sql "$DB" "GRANT CONNECT ON DATABASE \"$DB\" TO \"$USERNAME\";"
-    run_sql "$DB" "GRANT USAGE ON SCHEMA public TO \"$USERNAME\";"
-    run_sql "$DB" "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"$USERNAME\";"
-    run_sql "$DB" "GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO \"$USERNAME\";"
-    run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO \"$USERNAME\";"
-    run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO \"$USERNAME\";"
+    for SCHEMA in "$${SCHEMAS[@]}"; do
+      run_sql "$DB" "GRANT USAGE ON SCHEMA \"$SCHEMA\" TO \"$USERNAME\";"
+      run_sql "$DB" "GRANT SELECT ON ALL TABLES IN SCHEMA \"$SCHEMA\" TO \"$USERNAME\";"
+      run_sql "$DB" "GRANT SELECT ON ALL SEQUENCES IN SCHEMA \"$SCHEMA\" TO \"$USERNAME\";"
+      # Covers tables the root user creates later. Tables created by one of
+      # default_privileges_for_roles below need their own grantor-scoped grant.
+      run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA \"$SCHEMA\" GRANT SELECT ON TABLES TO \"$USERNAME\";"
+      run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA \"$SCHEMA\" GRANT SELECT ON SEQUENCES TO \"$USERNAME\";"
+
+      for ROLE in "$${DEFAULT_PRIVILEGE_ROLES[@]}"; do
+        run_sql "$DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$ROLE\" IN SCHEMA \"$SCHEMA\" GRANT SELECT ON TABLES TO \"$USERNAME\";"
+        run_sql "$DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$ROLE\" IN SCHEMA \"$SCHEMA\" GRANT SELECT ON SEQUENCES TO \"$USERNAME\";"
+      done
+    done
   done
 
   # Make sure the user doesn't have access to any other databases.
@@ -171,14 +188,25 @@ elif [ "$ENGINE" = "postgresql" ]; then
     if ! $in_dbs; then
       echo "Revoking $USERNAME privileges from database $DB..."
       run_sql "$DB" "REVOKE CONNECT ON DATABASE \"$DB\" FROM \"$USERNAME\";"
-      run_sql "$DB" "REVOKE USAGE ON SCHEMA public FROM \"$USERNAME\";"
-      run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM \"$USERNAME\";"
-      run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM \"$USERNAME\";"
-      run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL PRIVILEGES ON TABLES FROM \"$USERNAME\";"
-      run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL PRIVILEGES ON SEQUENCES FROM \"$USERNAME\";"
+      for SCHEMA in "$${SCHEMAS[@]}"; do
+        run_sql "$DB" "REVOKE USAGE ON SCHEMA \"$SCHEMA\" FROM \"$USERNAME\";"
+        run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA \"$SCHEMA\" FROM \"$USERNAME\";"
+        run_sql "$DB" "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA \"$SCHEMA\" FROM \"$USERNAME\";"
+        run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA \"$SCHEMA\" REVOKE ALL PRIVILEGES ON TABLES FROM \"$USERNAME\";"
+        run_sql "$DB" "ALTER DEFAULT PRIVILEGES IN SCHEMA \"$SCHEMA\" REVOKE ALL PRIVILEGES ON SEQUENCES FROM \"$USERNAME\";"
+        for ROLE in "$${DEFAULT_PRIVILEGE_ROLES[@]}"; do
+          run_sql "$DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$ROLE\" IN SCHEMA \"$SCHEMA\" REVOKE ALL PRIVILEGES ON TABLES FROM \"$USERNAME\";"
+          run_sql "$DB" "ALTER DEFAULT PRIVILEGES FOR ROLE \"$ROLE\" IN SCHEMA \"$SCHEMA\" REVOKE ALL PRIVILEGES ON SEQUENCES FROM \"$USERNAME\";"
+        done
+      done
     fi
   done
 
   # Ensure the user cannot create databases.
   run_sql "postgres" "ALTER USER \"$USERNAME\" WITH NOCREATEDB;"
+
+  # Role-level settings, each independently optional.
+  [ -n "$DEFAULT_TRANSACTION_READ_ONLY" ] && run_sql "postgres" "ALTER ROLE \"$USERNAME\" SET default_transaction_read_only = $DEFAULT_TRANSACTION_READ_ONLY;"
+  [ -n "$STATEMENT_TIMEOUT" ] && run_sql "postgres" "ALTER ROLE \"$USERNAME\" SET statement_timeout = '$STATEMENT_TIMEOUT';"
+  [ -n "$CONNECTION_LIMIT" ] && run_sql "postgres" "ALTER ROLE \"$USERNAME\" CONNECTION LIMIT $CONNECTION_LIMIT;"
 fi

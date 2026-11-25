@@ -225,11 +225,19 @@ variable "db_users" {
   type = map(object({
     databases  = list(string)
     privileges = optional(string, "readonly")
+
+    schemas                       = optional(list(string), ["public"])
+    default_transaction_read_only = optional(bool)
+    statement_timeout             = optional(number)
+    connection_limit              = optional(number)
   }))
   description = <<-EOT
     Map of database users to create on the cluster. The map key becomes the
     database username. Requires `enable_data_api = true` and the AWS CLI must
     be installed on the OpenTofu runner.
+
+    `schemas`, `default_transaction_read_only`, `statement_timeout`, and
+    `connection_limit` are only supported with `engine = "postgresql"`.
     EOT
   default     = {}
 
@@ -255,6 +263,14 @@ variable "db_users" {
   validation {
     condition = alltrue([
       for _, user in var.db_users :
+      user.databases != null && length(user.databases) > 0
+    ])
+    error_message = "db_users databases must be a non-empty list."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, user in var.db_users :
       alltrue([
         for db in try(user.databases, []) :
         can(regex("^[a-zA-Z0-9_-]{1,63}$", db))
@@ -272,6 +288,41 @@ variable "db_users" {
       user.privileges == "readonly"
     ])
     error_message = "Database user privileges must be \"readonly\"; only read-only access is supported for db_users."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, user in var.db_users :
+      length(user.schemas) > 0 && alltrue([for s in user.schemas : can(regex("^[a-zA-Z_][a-zA-Z0-9_-]{0,62}$", s))])
+    ])
+    error_message = "db_users schemas must be a non-empty list of valid identifiers."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, user in var.db_users :
+      user.connection_limit == null || (user.connection_limit >= -1 && floor(user.connection_limit) == user.connection_limit)
+    ])
+    error_message = "db_users connection_limit must be a whole number >= -1."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, user in var.db_users :
+      user.statement_timeout == null || (user.statement_timeout >= 0 && floor(user.statement_timeout) == user.statement_timeout)
+    ])
+    error_message = "db_users statement_timeout must be a whole number of milliseconds >= 0."
+  }
+
+  validation {
+    condition = var.engine == "postgresql" || alltrue([
+      for _, user in var.db_users :
+      length(user.schemas) == 1 && user.schemas[0] == "public" &&
+      user.default_transaction_read_only == null &&
+      user.statement_timeout == null &&
+      user.connection_limit == null
+    ])
+    error_message = "schemas, default_transaction_read_only, statement_timeout, and connection_limit on db_users require engine = \"postgresql\"."
   }
 }
 

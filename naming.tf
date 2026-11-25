@@ -150,6 +150,22 @@ locals {
     }
   ]...)
 
+  # Each db_users entry's default-privilege grantors: every "all"-privilege
+  # iam_db_users/apps role sharing one of its databases, or with no databases
+  # of its own (cluster-wide access). Postgres-only — MySQL has no ALTER
+  # DEFAULT PRIVILEGES equivalent, so there's nothing to discover there.
+  db_users_write_roles = {
+    for username, user in var.db_users : username => (
+      var.engine == "postgresql" ? [
+        for role_username, role in local.combined_iam_db_users : role_username
+        if role.privileges == "all" && (
+          length(role.databases) == 0 ||
+          length([for db in role.databases : db if contains(user.databases, db)]) > 0
+        )
+      ] : []
+    )
+  }
+
   # db_users creates roles in the same Postgres username namespace, so a
   # collision with it is just as real despite the separate resource path.
   db_users_username_sources = [
